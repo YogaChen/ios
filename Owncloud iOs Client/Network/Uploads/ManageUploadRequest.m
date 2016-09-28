@@ -43,6 +43,7 @@
  * Method that begin upload files
  */
 - (void)addFileToUpload:(UploadsOfflineDto*) currentUpload {
+    NSLog(@"_add file to upload");
     
     self.currentUpload = currentUpload;
     _transferProgress = 0.0;
@@ -67,21 +68,26 @@
     
     self.userUploading = [ManageUsersDB getUserByIdUser:_currentUpload.userId];
     
+    NSLog(@"_self.userUploading is: %@", self.userUploading.username);
+    
     [self checkIfExistOnserverAndBeginUpload];
 }
 
 -(void) checkIfExistOnserverAndBeginUpload {
+    NSLog(@"_check if exist on server and begin upload");
     
     _userUploading = [ManageUsersDB getUserByIdUser:_currentUpload.userId];
     
     if (_currentUpload.isNotNecessaryCheckIfExist) {
+        NSLog(@"_current upload is not neccesary check if exist");
         [self performSelectorInBackground:@selector(startUploadFile) withObject:nil];
     } else {
+        NSLog(@"_current upload is necessary check if exist");
         _utilsNetworkRequest = [UtilsNetworkRequest new];
         _utilsNetworkRequest.delegate = self;
         
         NSString *serverUrl = [NSString stringWithFormat:@"%@%@",self.currentUpload.destinyFolder,self.currentUpload.uploadFileName];
-        
+        NSLog(@"_server url: %@", serverUrl);
         [_utilsNetworkRequest checkIfTheFileExistsWithThisPath:serverUrl andUser:_userUploading];
         
         //Upload ready, continue with next
@@ -225,14 +231,18 @@
 
 
 - (void) startUploadFile {
+    NSLog(@"_start upload file");
+    
     _isFromBackground = NO;
     
     DLog(@"self.currentUpload: %@", _currentUpload.uploadFileName);
+    NSLog(@"_self.currentUpload: %@", _currentUpload.uploadFileName);
     
     if (_currentUpload.isNotNecessaryCheckIfExist) {
+        NSLog(@"_current upload is not necesary check if exist and set as waitingForUpload");
         //Upload ready, continue with next
         [ManageUploadsDB setStatus:waitingForUpload andKindOfError:notAnError byUploadOffline:self.currentUpload];
-        _currentUpload.status=waitingForUpload;
+        _currentUpload.status = waitingForUpload;
     }
     
     //Set the right credentials
@@ -256,6 +266,7 @@
     
     
     DLog(@"_startUploadFile_ previous send request, origin: @% destiny: @%",_currentUpload.originPath, urlClean);
+    NSLog(@"_startUploadFile_ previous send request, origin: @% destiny: @%",_currentUpload.originPath, urlClean);
     
     self.uploadTask = [[AppDelegate sharedOCCommunication] uploadFileSession:_currentUpload.originPath toDestiny:urlClean onCommunication:[AppDelegate sharedOCCommunication] progress:^(NSProgress *progress) {
         
@@ -266,6 +277,7 @@
         AppDelegate *appDelegate = (AppDelegate*)[[UIApplication sharedApplication] delegate];
         
         DLog(@"File uploaded");
+        NSLog(@"File uploaded");
         
         DLog(@"self.currentUpload: %@", weakSelf.currentUpload.uploadFileName);
         
@@ -334,6 +346,9 @@
         DLog(@"response.statusCode: %ld", (long)httpResponse.statusCode);
         DLog(@"Error: %@", error);
         DLog(@"error.code: %ld", (long)error.code);
+        NSLog(@"response.statusCode: %ld", (long)httpResponse.statusCode);
+        NSLog(@"Error: %@", error);
+        NSLog(@"error.code: %ld", (long)error.code);
         
         BOOL isSamlCredentialsError=NO;
         
@@ -404,7 +419,7 @@
             
         }
     } failureBeforeRequest:^(NSError *error) {
-        
+        NSLog(@"_Upload Network Process - Failure before to request in");
         switch (error.code) {
             case OCErrorFileToUploadDoesNotExist: {
                 NSLog(@"(Error, fails before request. File not exist)_startUploadFile_: %@ Error: %ld - %@",weakSelf.currentUpload.uploadFileName, (long)[error code] , [error localizedDescription]);
@@ -437,10 +452,9 @@
     }];
     
     if (_currentUpload.isNotNecessaryCheckIfExist) {
+        NSLog(@"_Upload Added Continue with the Next");
         [self.delegate uploadAddedContinueWithNext];
     }
-    
-    DLog(@"taskIdentifier: %lu", (unsigned long)_uploadTask.taskIdentifier);
     
     if (_uploadTask) {
         [self setTaskIdentifier];
@@ -451,6 +465,8 @@
 //Method to set the task identifier
 - (void) setTaskIdentifier{
     
+    NSLog(@"taskIdentifier: %lu", (unsigned long)_uploadTask.taskIdentifier);
+    DLog(@"taskIdentifier: %lu", (unsigned long)_uploadTask.taskIdentifier);
     [ManageUploadsDB setTaskIdentifier:_uploadTask.taskIdentifier forUploadOffline:_currentUpload];
     
 }

@@ -48,7 +48,9 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
 #pragma mark - Gallery Upload, Upload camera assets, instant upload
 
 - (void) addAssetsToUploadFromArray:(NSArray <PHAsset *>*) info andRemoteFoldersToUpload:(NSMutableArray *) arrayOfRemoteurl {
-    for (int i = 0 ; i < [info count] ; i++) {
+    NSLog(@"_add_Assets_To_Upload_From_Array");
+    for (NSInteger i = 0 ; i < [info count] ; i++) {
+        NSLog(@"_item to upload number: %ld", (long)i);
         [self.listOfAssetsToUpload addObject:[info objectAtIndex:i]];
         [self.arrayOfRemoteurl addObject:[arrayOfRemoteurl objectAtIndex:i]];
     }
@@ -68,12 +70,15 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
 }
 
 - (void)sendFileToUploadByUploadOfflineDto:(UploadsOfflineDto *) currentUpload {
-    NSLog(@"self.currentUpload: %@", currentUpload.uploadFileName);
-    NSLog(@"isLast: %d", currentUpload.isLastUploadFileOfThisArray);
+    NSLog(@"_send File to upload");
+    NSLog(@"_self.currentUpload: %@", currentUpload.uploadFileName);
+    NSLog(@"_isLast: %d", currentUpload.isLastUploadFileOfThisArray);
     
     ManageUploadRequest *currentManageUploadRequest = [ManageUploadRequest new];
     currentManageUploadRequest.delegate = self;
     currentManageUploadRequest.lenghtOfFile = [UploadUtils makeLengthString:currentUpload.estimateLength];
+    
+    NSLog(@"_currentManageUploadRequest leght of file: %@ bytes", currentManageUploadRequest.lenghtOfFile);
     
     [currentManageUploadRequest addFileToUpload:currentUpload];
     
@@ -84,7 +89,10 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
     @synchronized (self) {
         AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
         
-        if(self.listOfAssetsToUpload && [self.listOfAssetsToUpload count] >0) {
+        if(self.listOfAssetsToUpload && [self.listOfAssetsToUpload count] > 0) {
+            
+            NSLog(@"_listOfAssetsToUpload: %lu", (unsigned long)self.listOfAssetsToUpload.count);
+            
             PHAsset *assetToUpload = self.listOfAssetsToUpload[0];
             NSString *uploadPath = self.arrayOfRemoteurl[0];
             
@@ -102,6 +110,9 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
     NSString *fileName = [FileNameUtils getComposeNameFromPHAsset:assetToUpload];
     NSString *localPath = [[UtilsUrls getTempFolderForUploadFiles] stringByAppendingPathComponent:fileName];
     
+    NSLog(@"_fileName to upload: %@", fileName);
+    NSLog(@"_localPath to upload: %@", localPath);
+    
     void (^UploadFile)(NSString *, UploadsOfflineDto *) = ^(NSString *localPath, UploadsOfflineDto *upload) {
         NSLog(@"_UploadFile_ : %@ , localPath: %@", upload.uploadFileName, localPath);
         
@@ -109,11 +120,13 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
         
         if([self.listOfAssetsToUpload count] > 0) {
             //We have more files to process
+            
+            NSLog(@"_We have more files in the upload process, so continue with the next");
             [self startWithTheNextAsset];
         } else {
-            NSLog(@"No pending asset to process");
+            NSLog(@"_No pending asset to process");
             //We finish all the files of this block
-            NSLog(@"self.listOfUploadOfflineToGenerateSQL: %lu", (unsigned long)[self.listOfUploadOfflineToGenerateSQL count]);
+            NSLog(@"_self.listOfUploadOfflineToGenerateSQL: %lu", (unsigned long)[self.listOfUploadOfflineToGenerateSQL count]);
             
             //In this point we have all the files to upload in the Array
             [ManageUploadsDB insertManyUploadsOffline:self.listOfUploadOfflineToGenerateSQL];
@@ -124,28 +137,39 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
             
             self.positionOfCurrentUploadInArray = 0;
             
-            [self performSelectorOnMainThread:@selector(endLoadingInFileList) withObject:nil waitUntilDone:YES];
+            NSLog(@"_endingLoadingInFileListSend");
+            
+            //[self performSelectorOnMainThread:@selector(endLoadingInFileList) withObject:nil waitUntilDone:YES];
+            
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [self endLoadingInFileList];
+            });
             
             UploadsOfflineDto *currentFile = [ManageUploadsDB getNextUploadOfflineFileToUpload];
             
             //We begin with the first file of the array
             if (currentFile) {
+                NSLog(@"_Send File to Upload ... send");
                 [self sendFileToUploadByUploadOfflineDto:currentFile];
+            }else{
+                NSLog(@"_Problems does not exist currentFile");
             }
         }
         
     };
     
     if (assetToUpload.mediaType == PHAssetMediaTypeImage) {
+        NSLog(@"_Asset to Upload it's an Image");
         [[PHImageManager defaultManager] requestImageDataForAsset:assetToUpload options:nil resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, UIImageOrientation orientation, NSDictionary * _Nullable info) {
-            
+            NSLog(@"_Resquest Image Data For Asset");
             NSFileManager *fileManager = [[NSFileManager alloc] init];
             if ([fileManager fileExistsAtPath:localPath]) {
+                NSLog(@"_Removed existing file");
                 [fileManager removeItemAtPath:localPath error:nil];
             }
             
             if (imageData && localPath) {
-                
+                NSLog(@"_Has Image Data and Local Path");
                 //Divide the file in chunks of 1024KB, then create the file with all chunks
                 
                 //Variables
@@ -159,7 +183,7 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                     [imageData writeToFile:localPath atomically:YES];
                     
                 } else {
-                    
+                    NSLog(@"_copyng Using Chunks - File: %@ - Path: %@ ",fileName, localPath);
                     //Create file
                     if (! [fileManager createFileAtPath:localPath contents:nil attributes:nil])
                     {
@@ -183,6 +207,7 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                                 NSData *adata = [NSData dataWithBytes:buffer length:thisChunkSize];
                                 
                                 DLog(@"Write buffer in file: %@", localPath);
+                                NSLog(@"_Write buffer in file: %@", localPath);
                                 NSFileHandle *fileHandle=[NSFileHandle fileHandleForWritingAtPath:localPath];
                                 [fileHandle seekToEndOfFile];
                                 [fileHandle writeData:adata];
@@ -206,6 +231,8 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                     NSLog(@"_error_createImageFileAtPath_ fileNotExists - File: %@ - Path: %@ - Error was code: %d - message: %s",fileName, localPath, errno, strerror(errno));
                 }
                 
+                NSLog(@"_creating a upload offline with: %lu bytes from: %@ path", imageData.length, localPath);
+                
                 UploadsOfflineDto *currentUpload = [[UploadsOfflineDto alloc] init];
                 currentUpload.originPath = localPath;
                 currentUpload.destinyFolder = remoteFolder;
@@ -224,9 +251,9 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
             }
         }];
     } else if (assetToUpload.mediaType == PHAssetMediaTypeVideo) {
-        
+         NSLog(@"_Asset to Upload it's an Video");
         [[PHImageManager defaultManager] requestPlayerItemForVideo:assetToUpload options:nil resultHandler:^(AVPlayerItem * _Nullable playerItem, NSDictionary * _Nullable info) {
-            
+            NSLog(@"_Resquested Video Data For Asset");
             NSString *videoFilePath;
             NSArray *tokenizedPHImageFileSandboxExtensionTokenKey = [info[@"PHImageFileSandboxExtensionTokenKey"] componentsSeparatedByString:@";"];
             for (NSString *substring in tokenizedPHImageFileSandboxExtensionTokenKey) {
@@ -236,9 +263,12 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                 }
             }
             
+            NSLog(@"_video File Path = %@", videoFilePath);
+            
             if (videoFilePath) {
                 NSFileManager *fileManager = [NSFileManager defaultManager];
                 if ([fileManager fileExistsAtPath:localPath]) {
+                     NSLog(@"_Removed existing file");
                     [fileManager removeItemAtPath:localPath error:nil];
                 }
                 
@@ -247,7 +277,10 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                 exportSession.outputURL = [NSURL fileURLWithPath:localPath];
                 exportSession.outputFileType = AVFileTypeQuickTimeMovie;
                 
+                NSLog(@"_exportUrl: %@", exportSession.outputURL.absoluteString);
+                
                 [exportSession exportAsynchronouslyWithCompletionHandler:^{
+                    NSLog(@"_export video asynchronously");
                     NSData *videoData = [NSData dataWithContentsOfURL:[NSURL fileURLWithPath:localPath]];
                     
                     if (videoData && localPath) {
@@ -274,10 +307,27 @@ NSString *ReloadFileListFromDataBaseNotification = @"ReloadFileListFromDataBaseN
                         
                         UploadFile(localPath, currentUpload);
                 
+                    }else{
+                        
+                        NSLog(@"_video data or local path does not exist");
+                        
+                        if (localPath) {
+                            NSLog(@"_localPath exist: %@", localPath);
+                        }else{
+                            NSLog(@"_localPath does not exist");
+                        }
+                        
+                        if (videoData) {
+                            NSLog(@"_videoData exist with: %lu bytes", (unsigned long)videoData.length);
+                        }else{
+                            NSLog(@"_videoData does not exist");
+                        }
                     }
                 }];
             }
         }];
+    }else{
+         NSLog(@"_Asset to Upload it's an Unknowm File");
     }
 }
 

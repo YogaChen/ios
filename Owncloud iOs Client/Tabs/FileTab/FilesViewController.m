@@ -747,6 +747,7 @@
         if (app.isLoadingVisible==NO) {
             // [MBProgressHUD hideAllHUDsForView:self.navigationController.view animated:YES];
             if (self.HUD) {
+                NSLog(@"_removing Loading Icon from super view");
                 [self.HUD removeFromSuperview];
             }
             self.view.userInteractionEnabled = YES;
@@ -757,10 +758,12 @@
         
         //Check if the app is wainting to show the upload from other app view
         if (app.isFileFromOtherAppWaitting && app.isPasscodeVisible == NO) {
+            NSLog(@"_ app from other app waiting or passcode visible");
             [app performSelector:@selector(presentUploadFromOtherApp) withObject:nil afterDelay:0.3];
         }
         
         if (!self.rename.renameAlertView.isVisible) {
+            NSLog(@"_rename was not visible");
             self.rename = nil;
         }
     }
@@ -1223,10 +1226,9 @@
 }
 
 - (void) initPrepareFiles:(NSArray *) info andArrayOFfolders: (NSMutableArray *)  arrayOfRemoteurl{
-   
+    NSLog(@"_InitPrepareFiles_ n: %lu files", (unsigned long)[arrayOfRemoteurl count]);
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
     [app.prepareFiles addAssetsToUploadFromArray:info andRemoteFoldersToUpload: arrayOfRemoteurl];
-    NSLog(@"_InitPrepareFiles_ n: %lu files", (unsigned long)[arrayOfRemoteurl count]);
     //Init loading to prepare files to upload
     dispatch_async(dispatch_get_main_queue(), ^{
         [self initLoading];
