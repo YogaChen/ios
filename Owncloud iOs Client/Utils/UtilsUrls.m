@@ -71,7 +71,7 @@
     NSString *path = [mainBundle pathForResource: @"Owncloud iOs Client" ofType: @"entitlements"];
     
     NSPropertyListFormat format;
-    NSDictionary *entitlement = [NSPropertyListSerialization propertyListFromData:[[NSFileManager defaultManager] contentsAtPath:path] mutabilityOption:NSPropertyListImmutable format:&format errorDescription:nil];
+    NSDictionary *entitlement = [NSPropertyListSerialization propertyListWithData:[[NSFileManager defaultManager] contentsAtPath:path]  options:NSPropertyListImmutable format:&format error:nil ];
     NSArray *securityGroups = [entitlement objectForKey:@"com.apple.security.application-groups"];
     
     return [securityGroups objectAtIndex:0];
@@ -91,6 +91,7 @@
     if (status != errSecSuccess)
         return nil;
     NSString *accessGroup = [(__bridge NSDictionary *)result objectForKey:(__bridge NSString *)kSecAttrAccessGroup];
+    DLog(@"accessGroup = %@",accessGroup);
     NSArray *components = [accessGroup componentsSeparatedByString:@"."];
     NSString *bundleSeedID = [[components objectEnumerator] nextObject];
     CFRelease(result);
@@ -558,7 +559,7 @@
 
 + (NSString *) getUserAgent {
     NSString *appVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-    NSString *userAgentWithAppVersion = [NSString stringWithFormat:@"%@%@",k_user_agent,appVersion];
+    NSString *userAgentWithAppVersion = [NSString stringWithFormat:@"%@",[k_user_agent stringByReplacingOccurrencesOfString:@"$appVersion" withString:appVersion]];
     
     return userAgentWithAppVersion;
     

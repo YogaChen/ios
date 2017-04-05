@@ -349,11 +349,9 @@
                 
                 //Check the login error in shibboleth
                 if (k_is_sso_active) {
-                    NSURL *samlRedirectUrl = [NSURL URLWithString:redirectedServer];
-                    NSHTTPURLResponse *responseCopyWithSamlRedirectUrl = [[NSHTTPURLResponse alloc]initWithURL:samlRedirectUrl statusCode:response.statusCode HTTPVersion:nil headerFields:[response allHeaderFields]];
                     
                     //Check if there are fragmens of saml in url, in this case there are a credential error
-                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:responseCopyWithSamlRedirectUrl.URL.absoluteString];
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                     
                     if (isSamlCredentialsError) {
                         
@@ -392,11 +390,9 @@
                 
                 //Check the login error in shibboleth
                 if (k_is_sso_active) {
-                    NSURL *samlRedirectUrl = [NSURL URLWithString:redirectedServer];
-                    NSHTTPURLResponse *responseCopyWithSamlRedirectUrl = [[NSHTTPURLResponse alloc]initWithURL:samlRedirectUrl statusCode:response.statusCode HTTPVersion:nil headerFields:[response allHeaderFields]];
                     
                     //Check if there are fragmens of saml in url, in this case there are a credential error
-                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:responseCopyWithSamlRedirectUrl.URL.absoluteString];
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                     
                     if (isSamlCredentialsError) {
                         
@@ -1044,7 +1040,7 @@
                 [tableView deselectRowAtIndexPath:indexPath animated:YES];
                 
                 DLog(@"File name is: %@", file.fileName);
-                FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:file];
+                FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:file andIsForceDownload:NO];
                 viewController.hidesBottomBarWhenPushed = YES;
                 viewController.sortedArray=sortArray;
                 
@@ -1068,9 +1064,8 @@
                 _selectedCell = indexPath;
                 
                 AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-                
                 app.detailViewController.sortedArray=sortArray;
-                [app.detailViewController handleFile:file fromController:sharedViewManagerController];
+                [app.detailViewController handleFile:file fromController:sharedViewManagerController andIsForceDownload:NO];
                 
                 ShareLinkCell *sharedLink = (ShareLinkCell*) [_sharedTableView cellForRowAtIndexPath:indexPath];
                 [sharedLink setSelectedStrong:YES];

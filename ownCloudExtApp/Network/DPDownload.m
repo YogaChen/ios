@@ -107,9 +107,9 @@
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
             if (isSamlCredentialsError) {
                 DLog(@"error login updating the etag");
                 //Set not download or downloaded in database
@@ -168,9 +168,9 @@
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
             if (isSamlCredentialsError) {
                 DLog(@"error login updating the etag");
                 //Set not download or downloaded in database
@@ -250,12 +250,11 @@
         [self.progressView stopSpinProgressBackgroundLayer];
         
         BOOL isSamlCredentialsError = NO;
-        NSString *redirectedServer = nil;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:(NSHTTPURLResponse *)response];
             if (isSamlCredentialsError) {
                 //Set not download or downloaded in database
                 if (self.file.isNecessaryUpdate) {
@@ -304,6 +303,9 @@
         }
         
     } failureRequest:^(NSURLResponse *response, NSError *error) {
+        
+        DLog(@"Error: %@", error);
+        
         [self.progressView stopSpinProgressBackgroundLayer];
         self.state = downloadFailed;
         
@@ -313,12 +315,10 @@
         
         BOOL isSamlCredentialsError = NO;
         
-        NSString *redirectedServer = nil;
-        
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:(NSHTTPURLResponse *)response];
             if (isSamlCredentialsError) {
                 //Set not download or downloaded in database
                 if (self.file.isNecessaryUpdate) {
@@ -332,7 +332,7 @@
             }
         }
         if (!isSamlCredentialsError) {
-            [self failureInDownloadProcessWithError:error andResponse:response];
+            [self failureInDownloadProcessWithError:error andResponse:(NSHTTPURLResponse *)response];
         }
     }];
     
@@ -404,6 +404,9 @@
                 break;
             case kOCErrorServerPathNotFound:
                 [self.delegate downloadFailed:NSLocalizedString(@"download_file_exist", nil) andFile:self.file];
+                break;
+            case kOCErrorServerMaintenanceError:
+                [self.delegate downloadFailed:NSLocalizedString(@"maintenance_mode_on_server_message", nil) andFile:self.file];
                 break;
             default:
                 [self.delegate downloadFailed:NSLocalizedString(@"not_possible_connect_to_server", nil) andFile:self.file];

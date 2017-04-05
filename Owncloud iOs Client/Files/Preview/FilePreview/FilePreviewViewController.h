@@ -18,13 +18,15 @@
 #import "Download.h"
 #import "OpenWith.h"
 #import "DeleteFile.h"
-#import "MediaViewController.h"
+#import "MediaAVPlayerViewController.h"
 #import "OfficeFileView.h"
 #import "GalleryView.h"
 #import "CheckAccessToServer.h"
 #import "OCToolBar.h"
 #import "CWStatusBarNotification.h"
 #import "ManageFavorites.h"
+#import "FLAnimatedImage.h"
+#import <AVKit/AVKit.h>
 
 @class ReaderDocument;
 @class ReaderViewController;
@@ -33,13 +35,17 @@ extern NSString * iPhoneCleanPreviewNotification;
 extern NSString * iPhoneShowNotConnectionWithServerMessageNotification;
 
 
-@interface FilePreviewViewController : UIViewController <UIAlertViewDelegate, DeleteFileDelegate, CheckAccessToServerDelegate, DownloadDelegate, MediaViewControllerDelegate, GalleryViewDelegate, ManageFavoritesDelegate>
+@interface FilePreviewViewController : UIViewController <UIAlertViewDelegate, DeleteFileDelegate, CheckAccessToServerDelegate, DownloadDelegate, GalleryViewDelegate, OfficeFileDelegate, ManageFavoritesDelegate, AVAssetResourceLoaderDelegate>
 {
     //Autolayout attributes
     IBOutlet NSLayoutConstraint *_progressViewHeightConstraint;
+    IBOutlet UIBarButtonItem *_openInButtonBar;
+    IBOutlet UIBarButtonItem *_flexibleSpaceAfterOpenInButtonBar;
     IBOutlet UIBarButtonItem *_favoriteButtonBar;
+    IBOutlet UIBarButtonItem *_flexibleSpaceAfterFavoriteButtonBar;
     IBOutlet UIBarButtonItem *_shareButtonBar;
     IBOutlet UIBarButtonItem *_flexibleSpaceAfterShareButtonBar;
+    IBOutlet UIBarButtonItem *_deleteButtonBar;
     
     
     NSString *nameFileToUpdate;
@@ -71,7 +77,8 @@ extern NSString * iPhoneShowNotConnectionWithServerMessageNotification;
 
 //Owncloud preview objects
 @property(nonatomic, strong) OfficeFileView *officeView;
-@property(nonatomic, strong) MediaViewController *moviePlayer;
+@property(nonatomic, strong) MediaAVPlayerViewController *avMoviePlayer;
+@property(nonatomic, strong) AVURLAsset *asset;
 @property(nonatomic, strong) GalleryView *galleryView;
 //Control the type of files
 @property(nonatomic) NSInteger typeOfFile;
@@ -79,6 +86,7 @@ extern NSString * iPhoneShowNotConnectionWithServerMessageNotification;
 @property(nonatomic) BOOL isDownloading;
 //Flag to check if the cancel was clicked before launch automatically the favorite download
 @property(nonatomic) BOOL isCancelDownloadClicked;
+@property(nonatomic) BOOL isForceDownload;
 
 //GALLERY
 //Array with the order images to the Gallery
@@ -91,13 +99,22 @@ extern NSString * iPhoneShowNotConnectionWithServerMessageNotification;
 @property(nonatomic, strong) ReaderDocument *documentPDF;
 @property(nonatomic, strong) ReaderViewController *readerPDFViewController;
 
+
+//Gif View
+@property(nonatomic, strong) FLAnimatedImageView *gifView;
+
 //Favorites
 @property(nonatomic, strong) ManageFavorites *manageFavorites;
+
+@property(nonatomic, strong) NSMutableArray *pendingRequests;
+@property(nonatomic, strong) NSMutableData *receivedData;
+@property(nonatomic, strong) NSURLConnection *connection;
+@property(nonatomic, strong) NSHTTPURLResponse *response;
 
 /*
  * Init method
  */
-- (id) initWithNibName:(NSString *) nibNameOrNil selectedFile:(FileDto *) file;
+- (id) initWithNibName:(NSString *) nibNameOrNil selectedFile:(FileDto *) file andIsForceDownload:(BOOL) isForceDownload;
 
 /*
  * Open With feature. Action to show the apps that can open the selected file

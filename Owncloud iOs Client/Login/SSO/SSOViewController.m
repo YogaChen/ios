@@ -58,6 +58,11 @@ static NSString *const tmpFileName = @"tmp.der";
     self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (self) {
         
+        //We init the ManageNetworkErrors
+        if (!_manageNetworkErrors) {
+            _manageNetworkErrors = [ManageNetworkErrors new];
+            _manageNetworkErrors.delegate = self;
+        }
     }
     return self;
 }
@@ -119,7 +124,7 @@ static NSString *const tmpFileName = @"tmp.der";
     self.urlStringToRetryTheWholeProcess = urlString;
     
     NSString *connectURL =[NSString stringWithFormat:@"%@%@",urlString, k_url_webdav_server_without_last_slash];
-    DLog(@"URL of shibbolet:%@",connectURL);
+    DLog(@"_openLink_ URL of shibbolet: %@",connectURL);
     _ownCloudServerUrlString = connectURL;
     
     [self clearAllCookies];
@@ -205,6 +210,7 @@ static NSString *const tmpFileName = @"tmp.der";
 }
 
 - (void) delay {
+    DLog(@"_delay_ new NSURLConnection");
     //We make a NSURLConnection to detect if we receive an authentication challenge
     [NSURLConnection connectionWithRequest:self.authRequest delegate:self];
 }
@@ -235,7 +241,7 @@ static NSString *const tmpFileName = @"tmp.der";
 }
 
 - (void)webViewDidStartLoad:(UIWebView *)webView {
-    DLog(@"loading started: %@", webView.request.URL.absoluteString);
+    DLog(@"_webViewDidStartLoad_: %@", webView.request.URL.absoluteString);
     
     [_webView endEditing:YES];
     
@@ -252,7 +258,7 @@ static NSString *const tmpFileName = @"tmp.der";
 
 -(void)webViewDidFinishLoad:(UIWebView *)webView {
     
-    DLog(@"webViewDidFinishLoad");
+    DLog(@"_webViewDidFinishLoad_");
     
     [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(delay) object:nil];
     
@@ -302,10 +308,12 @@ static NSString *const tmpFileName = @"tmp.der";
         if (samlNameUser) {
             DLog(@"samlNameUser: %@", samlNameUser);
             DLog(@"currentURL: %@", currentURL);
+            
+            //Send to the delegate class the cookie receive from the server
+            [_delegate setCookieForSSO:cookieString andSamlUserName:samlNameUser];
         }
         
-        //Send to the delegate class the cookie receive from the server
-        [_delegate setCookieForSSO:cookieString andSamlUserName:samlNameUser];
+
         
         //Close this view
         [self cancel:nil];
@@ -342,6 +350,7 @@ static NSString *const tmpFileName = @"tmp.der";
             [self showLoginInterface];
         }
     } else {
+        
         //Error credentials
         [UIAlertView showWithTitle:NSLocalizedString(@"error_login_message", nil) message:@"" cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil tapBlock:^(UIAlertView *alertView, NSInteger buttonIndex) {
             if (buttonIndex == [alertView cancelButtonIndex]) {
@@ -420,7 +429,22 @@ static NSString *const tmpFileName = @"tmp.der";
     
     return request;
 }
-   
+
+#pragma mark - ManageNetworkErrorsDelegate
+
+- (void)errorLogin {
+    DLog(@"Error login");
+}
+
+
+- (void)showError:(NSString *) message {
+    //Error credentials
+    [UIAlertView showWithTitle:message message:@"" cancelButtonTitle:NSLocalizedString(@"ok", nil) otherButtonTitles:nil tapBlock:^(UIAlertView *alertView, NSInteger buttonIndex) {
+
+    }];
+ 
+}
+
 #pragma mark - Buttons
 /*
  * This method close the view
@@ -460,8 +484,8 @@ static NSString *const tmpFileName = @"tmp.der";
  *
  */
 - (NSString *) requestForUserNameByCookie:(NSString *) cookieString {
-    
-    __block NSString *userName = nil;
+    DLog(@"_requestForUserNameByCookie:_ %@", cookieString);
+    __block NSString *userName = @"";
 
     //We create a semaphore to wait until we recive the responses from Async calls
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -499,6 +523,10 @@ static NSString *const tmpFileName = @"tmp.der";
     } failure:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
         
         DLog(@"Error: %@", error);
+        
+        userName = nil;
+        
+        [self.manageNetworkErrors returnSuitableWebDavErrorMessage:response.statusCode];
         
         //Error we do not have user
         dispatch_semaphore_signal(semaphore);

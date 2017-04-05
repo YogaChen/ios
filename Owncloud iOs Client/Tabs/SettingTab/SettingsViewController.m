@@ -228,12 +228,10 @@
     OCPortraitNavigationViewController *oc = [[OCPortraitNavigationViewController alloc]initWithRootViewController:_vc];
 
     //Indicate the pass code view mode
-    if(![ManageAppSettingsDB isPasscode]) {
-        //Set mode
-        self.vc.mode = KKPasscodeModeSet;
-    } else {
-        //Dissable mode
+    if([ManageAppSettingsDB isPasscode]) {
         self.vc.mode = KKPasscodeModeDisabled;
+    } else {
+        self.vc.mode = KKPasscodeModeSet;
     }
     
     if (IS_IPHONE) {
@@ -352,7 +350,7 @@
             break;
             
         case 2:
-            if (self.switchPasscode.on && [self isTouchIDAvailable]) {
+            if ((self.switchPasscode.on || k_is_passcode_forced) && [self isTouchIDAvailable]) {
                 n = 2;
             }else{
                 n = 1;
@@ -360,10 +358,10 @@
             break;
             
         case 3:
-            if ([[InstantUpload instantUploadManager] enabled]) {
-                n = 2;
+            if ([[InstantUpload instantUploadManager] imageInstantUploadEnabled] || [[InstantUpload instantUploadManager] videoInstantUploadEnabled]) {
+                n = 3;
             } else {
-                n = 1;
+                n = 2;
             }
             break;
         case 4:
@@ -693,21 +691,37 @@
     
     switch (row) {
         case 0:
-            if([self isTouchIDAvailable] && !self.switchPasscode.on) {
-                cell.textLabel.text = NSLocalizedString(@"title_app_pin_and_touchID", nil);
-            }
-            else{
-                cell.textLabel.text = NSLocalizedString(@"title_app_pin", nil);
+            
+            if (k_is_passcode_forced) {
+                //static NSString *CellIdentifier = @"AddAccountCell";
+
+                //cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:CellIdentifier];
+                cell.textLabel.text = NSLocalizedString(@"title_app_pin_forced", nil);
+                cell.selectionStyle = UITableViewCellSelectionStyleBlue;
+                cell.textLabel.font = k_settings_bold_font;
+                cell.textLabel.textAlignment = NSTextAlignmentCenter;
+                cell.editing = NO;
+                cell.backgroundColor = [UIColor colorOfBackgroundButtonOnList];
+                cell.textLabel.textColor = [UIColor colorOfTextButtonOnList];
+                cell.accessibilityLabel = ACS_SETTINGS_PASSCODE_CHANGE_CELL;
+
+            } else {
+                if([self isTouchIDAvailable] && !self.switchPasscode.on) {
+                    cell.textLabel.text = NSLocalizedString(@"title_app_pin_and_touchID", nil);
+                    
+                } else {
+                    cell.textLabel.text = NSLocalizedString(@"title_app_pin", nil);
+                }
+                self.switchPasscode = [[UISwitch alloc] initWithFrame:CGRectZero];
+                cell.accessoryView = self.switchPasscode;
+                [self.switchPasscode setOn:[ManageAppSettingsDB isPasscode] animated:YES];
+                [self.switchPasscode addTarget:self action:@selector(changeSwitchPasscode:) forControlEvents:UIControlEventValueChanged];
+                [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+                //Add accesibility label for Automation
+                self.switchPasscode.accessibilityLabel = ACS_SETTINGS_PASSCODE_SWITCH;
             }
             
-            self.switchPasscode = [[UISwitch alloc] initWithFrame:CGRectZero];
-            cell.accessoryView = self.switchPasscode;
-            [self.switchPasscode setOn:[ManageAppSettingsDB isPasscode] animated:YES];
-            [self.switchPasscode addTarget:self action:@selector(changeSwitchPasscode:) forControlEvents:UIControlEventValueChanged];
-            [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-            
-            //Add accesibility label for Automation
-            self.switchPasscode.accessibilityLabel = ACS_SETTINGS_PASSCODE_SWITCH;
+
             
             break;
             
@@ -737,17 +751,26 @@
     
     switch (row) {
         case 0:
-            cell.textLabel.text = NSLocalizedString(@"title_instant_upload", nil);
-            self.switchInstantUpload = [[UISwitch alloc] initWithFrame:CGRectZero];
-            cell.accessoryView = self.switchInstantUpload;
-            [self.switchInstantUpload setOn:[[InstantUpload instantUploadManager] enabled] animated:YES];
-            [self.switchInstantUpload addTarget:self action:@selector(changeSwitchInstantUpload:) forControlEvents:UIControlEventValueChanged];
+            cell.textLabel.text = NSLocalizedString(@"title_instant_upload_photos", nil);
+            self.switchInstantUploadPhotos = [[UISwitch alloc] initWithFrame:CGRectZero];
+            cell.accessoryView = self.switchInstantUploadPhotos;
+            [self.switchInstantUploadPhotos setOn:[[InstantUpload instantUploadManager] imageInstantUploadEnabled] animated:YES];
+            [self.switchInstantUploadPhotos addTarget:self action:@selector(changeSwitchImageInstantUpload:) forControlEvents:UIControlEventValueChanged];
             [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-            
-            self.switchInstantUpload.accessibilityLabel = ACS_SETTINGS_INSTANT_UPLOADS_SWITCH;
+            self.switchInstantUploadPhotos.accessibilityLabel = ACS_SETTINGS_INSTANT_UPLOAD_PHOTOS_SWITCH;
             
             break;
         case 1:
+            cell.textLabel.text = NSLocalizedString(@"title_instant_upload_videos", nil);
+            self.switchInstantUploadVideos = [[UISwitch alloc] initWithFrame:CGRectZero];
+            cell.accessoryView = self.switchInstantUploadVideos;
+            [self.switchInstantUploadVideos setOn:[[InstantUpload instantUploadManager] videoInstantUploadEnabled] animated:YES];
+            [self.switchInstantUploadVideos addTarget:self action:@selector(changeSwitchVideoInstantUpload:) forControlEvents:UIControlEventValueChanged];
+            [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
+            self.switchInstantUploadVideos.accessibilityLabel = ACS_SETTINGS_INSTANT_UPLOAD_VIDEOS_SWITCH;
+            
+            break;
+        case 2:
             cell.textLabel.text = NSLocalizedString(@"title_background_instant_upload", nil);
             
             self.switchBackgroundInstantUpload = [[UISwitch alloc] initWithFrame:CGRectZero];
@@ -757,7 +780,7 @@
             
             [self.switchBackgroundInstantUpload addTarget:self action:@selector(changeSwitchBackgroundInstantUpload:) forControlEvents:UIControlEventValueChanged];
             [cell setSelectionStyle:UITableViewCellSelectionStyleNone];
-            self.switchInstantUpload.accessibilityLabel = ACS_SETTINGS_BACKGROUND_INSTANT_UPLOADS_SWITCH;
+            self.switchBackgroundInstantUpload.accessibilityLabel = ACS_SETTINGS_BACKGROUND_INSTANT_UPLOADS_SWITCH;
             break;
         default:
             break;
@@ -863,6 +886,12 @@
         case 1:
             if (k_multiaccount_available) {
                 [self didPressOnAddAccountButton];
+            }
+            break;
+            
+        case 2:
+            if (k_is_passcode_forced) {
+                [self didPressOnChangePasscodeButton];
             }
             break;
             
@@ -1039,6 +1068,31 @@
         navController.modalPresentationStyle = UIModalPresentationFormSheet;
         [app.splitViewController presentViewController:navController animated:YES completion:nil];
     }
+
+}
+
+- (void) didPressOnChangePasscodeButton{
+    
+    //Create pass code view controller
+    self.vc = [[KKPasscodeViewController alloc] initWithNibName:nil bundle:nil];
+    self.vc.delegate = self;
+    
+    //Create the navigation bar of portrait
+    OCPortraitNavigationViewController *oc = [[OCPortraitNavigationViewController alloc]initWithRootViewController:_vc];
+    
+    self.vc.mode = KKPasscodeModeChange;
+    
+    if (IS_IPHONE) {
+        //is iphone
+        [self presentViewController:oc animated:YES completion:nil];
+    } else {
+        //is ipad
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        oc.modalPresentationStyle = UIModalPresentationFormSheet;
+        [app.splitViewController presentViewController:oc animated:YES completion:nil];
+    }
+    
+    [self.settingsTableView reloadData];
 
 }
 
@@ -1656,15 +1710,22 @@
 
 #pragma mark - Instant Upload
 
--(IBAction)changeSwitchInstantUpload:(id)sender {
+-(IBAction)changeSwitchImageInstantUpload:(id)sender {
     UISwitch *uiSwitch = (UISwitch *)sender;
-    [[InstantUpload instantUploadManager] setEnabled:uiSwitch.on];
+    [[InstantUpload instantUploadManager] setImageInstantUploadEnabled:uiSwitch.on];
+    [self refreshTable];
+}
+
+-(IBAction)changeSwitchVideoInstantUpload:(id)sender {
+    UISwitch *uiSwitch = (UISwitch *)sender;
+    [[InstantUpload instantUploadManager] setVideoInstantUploadEnabled:uiSwitch.on];
     [self refreshTable];
 }
 
 -(IBAction)changeSwitchBackgroundInstantUpload:(id)sender {
     UISwitch *uiSwitch = (UISwitch *)sender;
     [[InstantUpload instantUploadManager] setBackgroundInstantUploadEnabled:uiSwitch.on];
+    [self refreshTable];
 }
 
 #pragma mark - Semaphore
@@ -1817,7 +1878,8 @@
 #pragma mark InstantUploadDelegate methods
 
 - (void) instantUploadPermissionLostOrDenied {
-    self.switchInstantUpload.on = NO;
+    self.switchInstantUploadPhotos.on = NO;
+    self.switchInstantUploadVideos.on = NO;
 }
 
 - (void) backgroundInstantUploadPermissionLostOrDenied {

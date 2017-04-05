@@ -676,9 +676,9 @@
         return 1;
     }else if (section == 1 && k_is_share_with_users_available){
         if (self.sharedUsersOrGroups.count == 0) {
-           return self.sharedUsersOrGroups.count + 2;
-        }else{
            return self.sharedUsersOrGroups.count + 1;
+        }else{
+           return self.sharedUsersOrGroups.count;
         }
     } else if ((section == 1 || section == 2) && k_is_share_by_link_available){
         return self.optionsShownWithShareLink;
@@ -706,10 +706,6 @@
                 if (indexPath.row == 0 && self.sharedUsersOrGroups.count == 0) {
                     
                     cell = [self getCellShareUserByTableView:tableView];
-                    
-                } else if ((indexPath.row == 1 && self.sharedUsersOrGroups.count == 0) || (indexPath.row == self.sharedUsersOrGroups.count)){
-                    
-                    cell = [self getCellShareWithUserOrGroupButtonByTableView:tableView];
                     
                 } else {
                     
@@ -795,27 +791,12 @@
     NSString *name = NSLocalizedString(@"not_share_with_users_yet", nil);
     
     shareUserCell.itemName.text = name;
+    shareUserCell.itemName.textColor = [UIColor grayColor];
     
     shareUserCell.selectionStyle = UITableViewCellEditingStyleNone;
     
     return shareUserCell;
     
-}
-
-- (UITableViewCell *) getCellShareWithUserOrGroupButtonByTableView:(UITableView *) tableView {
-    
-    ShareLinkButtonCell *shareLinkButtonCell = [tableView dequeueReusableCellWithIdentifier:shareLinkButtonIdentifier];
-    
-    if (shareLinkButtonCell == nil) {
-        NSArray *topLevelObjects = [[NSBundle mainBundle] loadNibNamed:shareLinkButtonNib owner:self options:nil];
-        shareLinkButtonCell = (ShareLinkButtonCell *)[topLevelObjects objectAtIndex:0];
-    }
-    
-    shareLinkButtonCell.backgroundColor = [UIColor colorOfLoginButtonBackground];
-    shareLinkButtonCell.titleButton.textColor = [UIColor colorOfLoginButtonTextColor];
-    shareLinkButtonCell.titleButton.text = NSLocalizedString(@"add_user_or_group_title", nil);
-    
-    return shareLinkButtonCell;
 }
 
 - (UITableViewCell *) getCellOfUserOrGroupNameSharedByTableView:(UITableView *) tableView andIndexPath:(NSIndexPath *) indexPath {
@@ -861,9 +842,15 @@
         shareLinkButtonCell = (ShareLinkButtonCell *)[topLevelObjects objectAtIndex:0];
     }
     
-    shareLinkButtonCell.backgroundColor = [UIColor colorOfLoginButtonBackground];
-    shareLinkButtonCell.titleButton.textColor = [UIColor colorOfLoginButtonTextColor];
-    shareLinkButtonCell.titleButton.text = NSLocalizedString(@"get_share_link", nil);
+    shareLinkButtonCell.shareLinkButton.layer.cornerRadius = 10;
+    shareLinkButtonCell.shareLinkButton.clipsToBounds = YES;
+    shareLinkButtonCell.shareLinkButton.backgroundColor = [UIColor colorOfLoginButtonBackground];
+    [shareLinkButtonCell.shareLinkButton setTitleColor:[UIColor colorOfLoginButtonTextColor] forState:UIControlStateNormal];
+    [shareLinkButtonCell.shareLinkButton setTitle:NSLocalizedString(@"get_share_link", nil) forState:UIControlStateNormal];
+    
+    shareLinkButtonCell.selectionStyle = UITableViewCellSelectionStyleNone;
+    
+    [shareLinkButtonCell.shareLinkButton addTarget:self action:@selector(didSelectGetShareLink) forControlEvents:UIControlEventTouchUpInside];
     
     return shareLinkButtonCell;
 }
@@ -1046,6 +1033,9 @@
     
     shareLinkHeaderCell.titleSection.text = NSLocalizedString(@"share_with_users_or_groups", nil);
     shareLinkHeaderCell.switchSection.hidden = true;
+    shareLinkHeaderCell.addButtonSection.hidden = false;
+    
+    [shareLinkHeaderCell.addButtonSection addTarget:self action:@selector(didSelectAddUserOrGroup) forControlEvents:UIControlEventTouchUpInside];
     
     return shareLinkHeaderCell;
 }
@@ -1054,6 +1044,9 @@
  * Method to get the header for the second section: Share by link
  */
 - (ShareLinkHeaderCell *) getHeaderCellForShareByLink:(ShareLinkHeaderCell *) shareLinkHeaderCell {
+    
+    shareLinkHeaderCell.switchSection.hidden = false;
+    shareLinkHeaderCell.addButtonSection.hidden = true;
     
     shareLinkHeaderCell.titleSection.text = NSLocalizedString(@"share_link_title", nil);
     [shareLinkHeaderCell.switchSection setOn:self.isShareLinkEnabled animated:false];
@@ -1095,13 +1088,6 @@
                 [self didSelectSetPasswordLink];
             }
             break;
-        case 2:
-            if(!self.isAllowEditingShown){
-                [self didSelectGetShareLink];
-            }
-            break;
-        case 3:
-            [self didSelectGetShareLink];
         default:
             break;
     }

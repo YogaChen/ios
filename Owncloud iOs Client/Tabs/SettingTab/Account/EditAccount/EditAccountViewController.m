@@ -133,8 +133,7 @@ NSString *relaunchErrorCredentialFilesNotification = @"relaunchErrorCredentialFi
 
 - (void) viewDidAppear:(BOOL)animated {
 
-    [super viewDidAppear:animated];
-    [self textFieldDidEndEditing:self.urlTextField];
+   [self textFieldDidEndEditing:self.urlTextField];
     
     //Hide the show password button until the user write something
     showPasswordCharacterButton.hidden = YES;
@@ -306,20 +305,21 @@ NSString *relaunchErrorCredentialFilesNotification = @"relaunchErrorCredentialFi
         //Change the state of the of the user uploads with credential error
         [ManageUploadsDB updateErrorCredentialFiles:_selectedUser.idUser];
         
-        //Cancel current uploads with the same user
-        AppDelegate *appDelegate = (AppDelegate*)[[UIApplication sharedApplication] delegate];
-        [appDelegate cancelTheCurrentUploadsOfTheUser:_selectedUser.idUser];
-        [appDelegate.downloadManager cancelDownloadsAndRefreshInterface];
-        [appDelegate launchProcessToSyncAllFavorites];
+        [self performSelector:@selector(restoreDownloadsAndUploads) withObject:nil afterDelay:5.0];
             
-         [[NSNotificationCenter defaultCenter] postNotificationName:relaunchErrorCredentialFilesNotification object:_selectedUser];
+        [[NSNotificationCenter defaultCenter] postNotificationName:relaunchErrorCredentialFilesNotification object:_selectedUser];
         
         [[self navigationController] popViewControllerAnimated:YES];
        
-        
         [self performSelector:@selector(closeViewController) withObject:nil afterDelay:0.5];
-        
     }
+}
+
+- (void) restoreDownloadsAndUploads {
+    //Cancel current uploads with the same user
+    [APP_DELEGATE cancelTheCurrentUploadsOfTheUser:_selectedUser.idUser];
+    [APP_DELEGATE.downloadManager cancelDownloadsAndRefreshInterface];
+    [APP_DELEGATE launchProcessToSyncAllFavorites];
 }
 
 /*- (void)sendErrorCredentialFilesNotification{

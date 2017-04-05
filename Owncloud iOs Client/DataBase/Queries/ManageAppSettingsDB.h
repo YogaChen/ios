@@ -29,6 +29,8 @@
  */
 +(void) insertPasscode: (NSString *) passcode;
 
++(void) updatePasscode: (NSString *) passcode;
+
 /*
  * Method that return the pin code
  */
@@ -63,14 +65,18 @@
 /*
  * Methods manage instant uploads photos
  */
-+(BOOL)isInstantUpload;
++(BOOL)isImageInstantUpload;
++(BOOL)isVideoInstantUpload;
 +(BOOL)isBackgroundInstantUpload;
-+(void)updateInstantUploadTo:(BOOL)instantUpload;
++(void)updateImageInstantUploadTo:(BOOL)instantUpload;
++(void)updateVideoInstantUploadTo:(BOOL)instantUpload;
 +(void)updateBackgroundInstantUploadTo:(BOOL)newValue;
 +(void)updatePathInstantUpload:(NSString *)newValue;
 +(void)updateInstantUploadAllUser;
-+(NSTimeInterval)getTimestampInstantUpload;
-+(void)updateTimestampInstantUpload:(NSTimeInterval)newValue;
++ (NSTimeInterval)getTimestampInstantUploadImage;
++ (NSTimeInterval)getTimestampInstantUploadVideo;
++ (void)updateTimestampInstantUploadImage:(NSTimeInterval)newValue;
++ (void)updateTimestampInstantUploadVideo:(NSTimeInterval)newValue;
 +(void)updateOnlyWifiInstantUpload:(BOOL)newValue;
 
 @end

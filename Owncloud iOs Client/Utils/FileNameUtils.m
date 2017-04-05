@@ -54,7 +54,9 @@
             typeOfFile = audioFileType;
         } else if ([self isOfficeSupportedThisFile:fileName]){
             typeOfFile = officeFileType;
-        } else {
+        } else if ([self isGifSupportedThisFile:fileName])
+             typeOfFile = gifFileType;
+        else {
             typeOfFile = otherFileType;
         }
     }
@@ -67,7 +69,7 @@
     
     NSString *ext=[self getExtension:fileName];
     
-    if([ext isEqualToString:@"JPG"] || [ext isEqualToString:@"PNG"] || [ext isEqualToString:@"GIF"] || [ext isEqualToString:@"TIFF"] || [ext isEqualToString:@"TIF"] || [ext isEqualToString:@"BMP"] || [ext isEqualToString:@"JPEG"])
+    if([ext isEqualToString:@"JPG"] || [ext isEqualToString:@"PNG"] || [ext isEqualToString:@"TIFF"] || [ext isEqualToString:@"TIF"] || [ext isEqualToString:@"BMP"] || [ext isEqualToString:@"JPEG"])
     {
         return YES;
     }
@@ -107,6 +109,18 @@
     NSString *ext=[self getExtension:fileName];
     
     if([ext isEqualToString:@"MP3"] || [ext isEqualToString:@"AIFF"] || [ext isEqualToString:@"AAC"] || [ext isEqualToString:@"WAV"]|| [ext isEqualToString:@"M4A"])
+    {
+        return YES;
+    }
+    
+    return NO;
+}
+
++ (BOOL)isGifSupportedThisFile:(NSString*)fileName{
+    
+    NSString *ext = [self getExtension:fileName];
+    
+    if([ext isEqualToString:@"GIF"])
     {
         return YES;
     }
@@ -255,15 +269,20 @@
 }
 
 
-+ (BOOL)isURLWithSamlFragment:(NSString*)urlString{
++ (BOOL) isURLWithSamlFragment:(NSHTTPURLResponse *)response {
     
     // NSString *samlFragment1 = @"AuthnEngine";
-
-    urlString = [urlString lowercaseString];
     
-    if (urlString) {
+    NSHTTPURLResponse *httpResponse = response;
+    NSDictionary *dict = [httpResponse allHeaderFields];
+    //Server path of redirected server
+    NSString *responseURLString = [dict objectForKey:@"Location"];
+
+    responseURLString = [responseURLString lowercaseString];
+    
+    if (responseURLString) {
         for (NSString* samlFragment in kSAMLFragmentArray) {
-            if ([urlString rangeOfString:samlFragment options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            if ([responseURLString rangeOfString:samlFragment options:NSCaseInsensitiveSearch].location != NSNotFound) {
                 NSLog(@"shibboleth fragment is in the request url");
                 return YES;
             }

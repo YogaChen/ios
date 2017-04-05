@@ -303,7 +303,8 @@
     
     if(!([currentUser.username isEqualToString:_mUser.username] &&
          [currentUser.password isEqualToString:_mUser.password] &&
-         [currentUser.url isEqualToString:_mUser.url])) {
+         [currentUser.url isEqualToString:_mUser.url] &&
+         currentUser.idUser == _mUser.idUser)) {
         //We are changing of user
         //Show the file list in the correct place
         [_tableView setContentOffset:CGPointMake(0,0) animated:animated];
@@ -376,9 +377,9 @@
                 BOOL isSamlCredentialsError = NO;
                 
                 //Check the login error in shibboleth
-                if (k_is_sso_active && redirectedServer) {
+                if (k_is_sso_active) {
                     //Check if there are fragmens of saml in url, in this case there are a credential error
-                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                     if (isSamlCredentialsError) {
                         [self errorLogin];
                     }
@@ -405,9 +406,9 @@
             BOOL isSamlCredentialsError = NO;
             
             //Check the login error in shibboleth
-            if (k_is_sso_active && redirectedServer) {
+            if (k_is_sso_active) {
                 //Check if there are fragmens of saml in url, in this case there are a credential error
-                isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                 if (isSamlCredentialsError) {
                     [self errorLogin];
                 }
@@ -698,38 +699,36 @@
  * Method that launch the loading screen and block the view
  */
 -(void)initLoading {
-    
-    if (self.HUD) {
-        [self.HUD removeFromSuperview];
-        self.HUD=nil;
-    }
-    
-    if (IS_IPHONE) {
-        self.HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
-        self.HUD.delegate = self;
-        [[UIApplication sharedApplication].keyWindow addSubview:self.HUD];
-    } else {
-        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    dispatch_async(dispatch_get_main_queue(), ^{
         
-        _HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
-        _HUD.delegate = self;
-        [app.splitViewController.view.window addSubview:_HUD];
-    }
-    
-    self.HUD.labelText = NSLocalizedString(@"loading", nil);
-    
-    if (IS_IPHONE) {
-        self.HUD.dimBackground = NO;
-    }else {
-        self.HUD.dimBackground = NO;
-    }
-    
-    [self.HUD show:YES];
-    
-    self.view.userInteractionEnabled = NO;
-    self.navigationController.navigationBar.userInteractionEnabled = NO;
-    self.tabBarController.tabBar.userInteractionEnabled = NO;
-    [self.view.window setUserInteractionEnabled:NO];
+        if (self.HUD) {
+            [self.HUD removeFromSuperview];
+            self.HUD=nil;
+        }
+        
+        if (IS_IPHONE) {
+            self.HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
+            self.HUD.delegate = self;
+            [[UIApplication sharedApplication].keyWindow addSubview:self.HUD];
+        } else {
+            AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+            
+            _HUD = [[MBProgressHUD alloc]initWithWindow:[UIApplication sharedApplication].keyWindow];
+            _HUD.delegate = self;
+            [app.splitViewController.view.window addSubview:_HUD];
+        }
+        
+        self.HUD.labelText = NSLocalizedString(@"loading", nil);
+        
+        if (IS_IPHONE) {
+            self.HUD.dimBackground = NO;
+        }else {
+            self.HUD.dimBackground = NO;
+        }
+        
+        [self.HUD show:YES];
+        
+    });
 }
 
 
@@ -737,30 +736,28 @@
  * Method that quit the loading screen and unblock the view
  */
 - (void)endLoading {
-    
-    if (!self.isLoadingForNavigate) {
-        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
-        //Check if the loading should be visible
-        if (app.isLoadingVisible==NO) {
-            // [MBProgressHUD hideAllHUDsForView:self.navigationController.view animated:YES];
-            if (self.HUD) {
-                [self.HUD removeFromSuperview];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.isLoadingForNavigate) {
+            AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+            //Check if the loading should be visible
+            if (app.isLoadingVisible==NO) {
+                // [MBProgressHUD hideAllHUDsForView:self.navigationController.view animated:YES];
+                if (self.HUD) {
+                    [self.HUD removeFromSuperview];
+                }
             }
-            self.view.userInteractionEnabled = YES;
-            self.navigationController.navigationBar.userInteractionEnabled = YES;
-            self.tabBarController.tabBar.userInteractionEnabled = YES;
-            [self.view.window setUserInteractionEnabled:YES];
+            
+            //Check if the app is wainting to show the upload from other app view
+            if (app.isFileFromOtherAppWaitting && app.isPasscodeVisible == NO) {
+                [app performSelector:@selector(presentUploadFromOtherApp) withObject:nil afterDelay:0.3];
+            }
+            
+            if (!self.rename.renameAlertView.isVisible) {
+                self.rename = nil;
+            }
         }
-        
-        //Check if the app is wainting to show the upload from other app view
-        if (app.isFileFromOtherAppWaitting && app.isPasscodeVisible == NO) {
-            [app performSelector:@selector(presentUploadFromOtherApp) withObject:nil afterDelay:0.3];
-        }
-        
-        if (!self.rename.renameAlertView.isVisible) {
-            self.rename = nil;
-        }
-    }
+    });
+
 }
 
 
@@ -923,9 +920,9 @@
                 BOOL isSamlCredentialsError = NO;
                 
                 //Check the login error in shibboleth
-                if (k_is_sso_active && redirectedServer) {
+                if (k_is_sso_active) {
                     //Check if there are fragmens of saml in url, in this case there are a credential error
-                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                     if (isSamlCredentialsError) {
                         [self errorLogin];
                     }
@@ -940,9 +937,9 @@
                 BOOL isSamlCredentialsError = NO;
                 
                 //Check the login error in shibboleth
-                if (k_is_sso_active && redirectedServer) {
+                if (k_is_sso_active) {
                     //Check if there are fragmens of saml in url, in this case there are a credential error
-                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                    isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                     if (isSamlCredentialsError) {
                         [self errorLogin];
                     }
@@ -1156,23 +1153,64 @@
  */
 - (void)elcImagePickerController:(ELCImagePickerController *)picker didFinishPickingMediaWithInfo:(NSArray *)info inURL:(NSString*)remoteURLToUpload
 {
-	//[self dismissModalViewControllerAnimated:YES];
-    
-    //[self dismissModalViewControllerAnimated:YES];
-	/*if(uploadingFilesArray != nil){
-     uploadingFilesArray = nil;
-     }*/   
-    
-    NSDictionary * args = [NSDictionary dictionaryWithObjectsAndKeys:
-                           (NSArray *) info, @"info",
-                           (NSString *) remoteURLToUpload, @"remoteURLToUpload", nil];
-    
-    [self performSelectorInBackground:@selector(initUploadFileFromGalleryInOtherThread:) withObject:args];
+    [self initLoading];
     
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
-    app.isUploadViewVisible = NO;
     
-    //[self endLoading];
+    //Set the right credentials
+    if (k_is_sso_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithCookie:app.activeUser.password];
+    } else if (k_is_oauth_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsOauthWithToken:app.activeUser.password];
+    } else {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithUser:app.activeUser.username andPassword:app.activeUser.password];
+    }
+    
+    [[AppDelegate sharedOCCommunication] setUserAgent:[UtilsUrls getUserAgent]];
+    
+    NSString *path = _nextRemoteFolder;
+    
+    path = [path stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    
+    if (!app.userSessionCurrentToken) {
+        app.userSessionCurrentToken = [UtilsFramework getUserSessionToken];
+    }
+
+    NSString *rootFolder =[NSString stringWithFormat:@"%@%@",app.activeUser.url,k_url_webdav_server];
+    
+    
+    [[AppDelegate sharedOCCommunication] checkServer:rootFolder onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
+        [self endLoading];
+        NSDictionary * args = [NSDictionary dictionaryWithObjectsAndKeys:
+                               (NSArray *) info, @"info",
+                               (NSString *) remoteURLToUpload, @"remoteURLToUpload", nil];
+        
+        [self performSelectorInBackground:@selector(initUploadFileFromGalleryInOtherThread:) withObject:args];
+        
+        app.isUploadViewVisible = NO;
+        
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
+        [self endLoading];
+        
+        app.isUploadViewVisible = NO;
+        
+        DLog(@"error: %@", error);
+        DLog(@"Operation error: %ld", (long)response.statusCode);
+        
+        BOOL isSamlCredentialsError = NO;
+        
+        //Check the login error in shibboleth
+        if (k_is_sso_active) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [self manageServerErrors:response.statusCode and:error];
+        }
+    }];
 }
 
 - (void)initUploadFileFromGalleryInOtherThread:(NSDictionary *) args {
@@ -1224,9 +1262,7 @@
     [app.prepareFiles addAssetsToUploadFromArray:info andRemoteFoldersToUpload: arrayOfRemoteurl];
     
     //Init loading to prepare files to upload
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self initLoading];
-    });
+    [self initLoading];
     
     //Set global loading screen global flag to YES (only for iPad)
     app.isLoadingVisible = YES;
@@ -1267,8 +1303,7 @@
     _selectedFileDto = selectedFile;
     
     if (IS_IPHONE){
-        
-        [self goToSelectedFileOrFolder:selectedFile];
+        [self goToSelectedFileOrFolder:selectedFile andForceDownload:NO];
     } else {
         
         //Select in detail view
@@ -1284,7 +1319,7 @@
             //Select in detail
             AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
             app.detailViewController.sortedArray=_sortedArray;
-            [app.detailViewController handleFile:selectedFile fromController:fileListManagerController];
+            [app.detailViewController handleFile:selectedFile fromController:fileListManagerController andIsForceDownload:NO];
             
             CustomCellFileAndDirectory *sharedLink = (CustomCellFileAndDirectory*) [_tableView cellForRowAtIndexPath:indexPath];
             [sharedLink setSelectedStrong:YES];
@@ -1645,7 +1680,7 @@
  * if is file open preview 
  * @selectedFile -> FileDto object selected by the user
  */
-- (void) goToSelectedFileOrFolder:(FileDto *) selectedFile {
+- (void) goToSelectedFileOrFolder:(FileDto *) selectedFile andForceDownload:(BOOL) isForceDownload {
     
     [self initLoading];
     
@@ -1654,9 +1689,20 @@
     } else {
         self.navigationItem.backBarButtonItem = nil;
 
-        self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"back", nil) style:UIBarButtonItemStylePlain target:nil action:nil];
+        // If the file is in root folder, show icon instead of folder name.
+        if(self.fileIdToShowFiles.isRootFolder){
+            UIBarButtonItem *backButton = [[UIBarButtonItem alloc]
+                                           initWithImage:[UIImage imageNamed:[FileNameUtils getTheNameOfTheBrandImage]]
+                                           style:UIBarButtonItemStyleBordered
+                                           target:nil
+                                           action:nil];
+            self.navigationItem.backBarButtonItem = backButton;
+        }else{
+            NSString *folderName = [[selectedFile.filePath stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding] lastPathComponent];
+            self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(folderName, nil) style:UIBarButtonItemStylePlain target:nil action:nil];
+        }
         
-        FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:selectedFile];
+        FilePreviewViewController *viewController = [[FilePreviewViewController alloc]initWithNibName:@"FilePreviewViewController" selectedFile:selectedFile andIsForceDownload:isForceDownload];
         
         //Hide tabbar
         viewController.hidesBottomBarWhenPushed = YES;
@@ -1762,9 +1808,9 @@
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
             if (isSamlCredentialsError) {
                 self.isLoadingForNavigate = NO;
                 [self errorLogin];
@@ -1785,9 +1831,9 @@
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
             if (isSamlCredentialsError) {
                 [self errorLogin];
             }
@@ -1994,9 +2040,9 @@
          BOOL isSamlCredentialsError = NO;
          
          //Check the login error in shibboleth
-         if (k_is_sso_active && redirectedServer) {
+         if (k_is_sso_active) {
              //Check if there are fragmens of saml in url, in this case there are a credential error
-             isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+             isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
              if (isSamlCredentialsError) {
                  [self errorLogin];
              }
@@ -2028,9 +2074,9 @@
         BOOL isSamlCredentialsError = NO;
         
         //Check the login error in shibboleth
-        if (k_is_sso_active && redirectedServer) {
+        if (k_is_sso_active) {
             //Check if there are fragmens of saml in url, in this case there are a credential error
-            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
             if (isSamlCredentialsError) {
                 [self errorLogin];
             }
@@ -2044,6 +2090,18 @@
 
 - (void) reloadCellByFile:(FileDto *) file {
    
+    NSArray* indexArray = [NSArray arrayWithObjects:[self getIndexPathFromFilesTableViewByFile:file], nil];
+    
+    dispatch_queue_t mainThreadQueue = dispatch_get_main_queue();
+    dispatch_async(mainThreadQueue, ^{
+        [self.tableView beginUpdates];
+        [self.tableView reloadRowsAtIndexPaths:indexArray withRowAnimation:UITableViewRowAnimationNone];
+        [self.tableView endUpdates];
+    });
+}
+
+- (NSIndexPath*) getIndexPathFromFilesTableViewByFile:(FileDto *) file {
+    
     NSIndexPath* indexPath;
     BOOL isFound = NO;
     
@@ -2068,14 +2126,7 @@
         }
     }
     
-    NSArray* indexArray = [NSArray arrayWithObjects:indexPath, nil];
-    
-    dispatch_queue_t mainThreadQueue = dispatch_get_main_queue();
-    dispatch_async(mainThreadQueue, ^{
-        [self.tableView beginUpdates];
-        [self.tableView reloadRowsAtIndexPaths:indexArray withRowAnimation:UITableViewRowAnimationNone];
-        [self.tableView endUpdates];
-    });
+    return indexPath;
 }
 
 /*
@@ -2200,9 +2251,9 @@
             BOOL isSamlCredentialsError=NO;
             
             //Check the login error in shibboleth
-            if (k_is_sso_active && redirectedServer) {
+            if (k_is_sso_active) {
                 //Check if there are fragmens of saml in url, in this case there are a credential error
-                isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:redirectedServer];
+                isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
                 if (isSamlCredentialsError) {
                     //We don't show a error login in this request.
                     //[self errorLogin];
@@ -2386,6 +2437,18 @@
                         [self didSelectFavoriteOption];
                     }
                     break;
+                case 4:
+                    if ([[AppDelegate sharedManageFavorites] isInsideAFavoriteFolderThisFile:self.selectedFileDto] || self.selectedFileDto.isFavorite  ||
+                        self.selectedFileDto.isDownload == downloaded) {
+                        DLog(@"Cancel");
+                    } else {
+                        if (self.selectedFileDto.isDownload == downloading ||
+                            self.selectedFileDto.isDownload == updating) {
+                            [self didSelectCancelDownloadFileOption];
+                        } else {
+                            [self didSelectDownloadFileOption];
+                        }
+                    }
                 default:
                     break;
             }
@@ -2750,14 +2813,62 @@
 - (void) didSelectDownloadFolder {
     DLog(@"Download Folder");
     
-    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
+    [self initLoading];
     
-    //Update fileDto
-    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     
-    [[AppDelegate sharedSyncFolderManager] addFolderToBeDownloaded:self.selectedFileDto];
-
-    [self reloadTableFileList];
+    //Set the right credentials
+    if (k_is_sso_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithCookie:app.activeUser.password];
+    } else if (k_is_oauth_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsOauthWithToken:app.activeUser.password];
+    } else {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithUser:app.activeUser.username andPassword:app.activeUser.password];
+    }
+    
+    [[AppDelegate sharedOCCommunication] setUserAgent:[UtilsUrls getUserAgent]];
+    
+    NSString *path = _nextRemoteFolder;
+    
+    path = [path stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    
+    if (!app.userSessionCurrentToken) {
+        app.userSessionCurrentToken = [UtilsFramework getUserSessionToken];
+    }
+    
+    NSString *rootFolder =[NSString stringWithFormat:@"%@%@",app.activeUser.url,k_url_webdav_server];
+    
+    [[AppDelegate sharedOCCommunication] checkServer:rootFolder onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
+        [self endLoading];
+        //Update fileDto
+        self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:app.activeUser] andUser:app.activeUser];
+        
+        [[AppDelegate sharedSyncFolderManager] addFolderToBeDownloaded:self.selectedFileDto];
+        
+        [self reloadTableFileList];
+        
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
+        [self endLoading];
+        
+        [self reloadTableFileList];
+        
+        DLog(@"error: %@", error);
+        DLog(@"Operation error: %ld", (long)response.statusCode);
+        
+        BOOL isSamlCredentialsError = NO;
+        
+        //Check the login error in shibboleth
+        if (k_is_sso_active) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [self manageServerErrors:response.statusCode and:error];
+        }
+    }];
 }
 
 /*
@@ -2820,6 +2931,52 @@
         if (app.detailViewController.file) {
             [app.detailViewController updateFavoriteIconWhenAFolderIsSelectedFavorite];
         }
+    }
+}
+
+- (void) didSelectDownloadFileOption {
+    
+    self.selectedFileDto = [ManageFilesDB getFileDtoByFileName:self.selectedFileDto.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:self.selectedFileDto.filePath andUser:APP_DELEGATE.activeUser] andUser:APP_DELEGATE.activeUser];
+    
+    if (IS_IPHONE){
+        [self goToSelectedFileOrFolder:self.selectedFileDto andForceDownload:YES];
+    } else {
+        
+        //Select in detail view
+        if (_selectedCell) {
+            CustomCellFileAndDirectory *temp = (CustomCellFileAndDirectory*) [_tableView cellForRowAtIndexPath:_selectedCell];
+            [temp setSelectedStrong:NO];
+        }
+        
+        //Select in detail
+        AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+        
+        //Quit the player if exist
+        if (app.detailViewController.avMoviePlayer) {
+            [app.detailViewController removeMediaPlayer];
+        }
+        app.detailViewController.sortedArray=_sortedArray;
+        [app.detailViewController handleFile:self.selectedFileDto fromController:fileListManagerController andIsForceDownload:YES];
+    }
+    
+    //Select the cell
+    NSIndexPath *indexPath = [self getIndexPathFromFilesTableViewByFile:self.selectedFileDto];
+    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
+    [cell setSelected:YES];
+
+}
+
+- (void) didSelectCancelDownloadFileOption {
+    DLog(@"Cancel download");
+    
+    if (IS_IPHONE) {
+        for (Download *currentDownload in [APP_DELEGATE.downloadManager getDownloads]) {
+            if (currentDownload.fileDto.idFile == self.selectedFileDto.idFile) {
+                [currentDownload cancelDownload];
+            }
+        }
+    } else {
+        [APP_DELEGATE.detailViewController didPressCancelButton:nil];
     }
 }
 
@@ -3026,21 +3183,72 @@
 /*
  * This method prepare the download manager to download a selected file
  */
-- (void)downloadTheFile{
-    if ([_selectedFileDto isDownload] == notDownload || _selectedFileDto.isNecessaryUpdate) {
-        //Phase 1.2. If the image isn't in the device, download image
-        DLog(@"The file is not download");
-        Download *download = nil;
-        download = [[Download alloc]init];
-        download.currentLocalFolder = _currentLocalFolder;
-        [download fileToDownload:_selectedFileDto];
+- (void) downloadTheFile {
+    
+    
+    [self initLoading];
+    
+    AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
+    
+    //Set the right credentials
+    if (k_is_sso_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithCookie:app.activeUser.password];
+    } else if (k_is_oauth_active) {
+        [[AppDelegate sharedOCCommunication] setCredentialsOauthWithToken:app.activeUser.password];
+    } else {
+        [[AppDelegate sharedOCCommunication] setCredentialsWithUser:app.activeUser.username andPassword:app.activeUser.password];
     }
+    
+    [[AppDelegate sharedOCCommunication] setUserAgent:[UtilsUrls getUserAgent]];
+    
+    if (!app.userSessionCurrentToken) {
+        app.userSessionCurrentToken = [UtilsFramework getUserSessionToken];
+    }
+    
+    NSString *rootFolder =[NSString stringWithFormat:@"%@%@",app.activeUser.url,k_url_webdav_server];
+    
+    [[AppDelegate sharedOCCommunication] checkServer:rootFolder onCommunication:[AppDelegate sharedOCCommunication] successRequest:^(NSHTTPURLResponse *response, NSString *redirectedServer) {
+        [self endLoading];
+        
+        if ([_selectedFileDto isDownload] == notDownload || _selectedFileDto.isNecessaryUpdate) {
+            //Phase 1.2. If the image isn't in the device, download image
+            DLog(@"The file is not download");
+            Download *download = nil;
+            download = [[Download alloc]init];
+            download.currentLocalFolder = _currentLocalFolder;
+            [download fileToDownload:_selectedFileDto];
+        }
+        
+        [self reloadTableFileList];
+        
+    } failureRequest:^(NSHTTPURLResponse *response, NSError *error, NSString *redirectedServer) {
+        [self endLoading];
+        
+        [self reloadTableFileList];
+        
+        DLog(@"error: %@", error);
+        DLog(@"Operation error: %ld", (long)response.statusCode);
+        
+        BOOL isSamlCredentialsError = NO;
+        
+        //Check the login error in shibboleth
+        if (k_is_sso_active) {
+            //Check if there are fragmens of saml in url, in this case there are a credential error
+            isSamlCredentialsError = [FileNameUtils isURLWithSamlFragment:response];
+            if (isSamlCredentialsError) {
+                [self errorLogin];
+            }
+        }
+        if (!isSamlCredentialsError) {
+            [self manageServerErrors:response.statusCode and:error];
+        }
+    }];
 }
 
 /*
  * Cancel the actual download file.
  */
--(void)cancelDownload{
+-(void) cancelDownload {
     if (_openWith) {
         DLog(@"CANCEL DOWNLOAD");
         [_openWith cancelDownload];
@@ -3500,15 +3708,29 @@
         }
     } else {
         
-        NSString *favoriteOrUnfavoriteString = @"";
+        NSString *availableOfflineOrNotString = @"";
         
         if (_selectedFileDto.isFavorite && !self.isCurrentFolderSonOfFavoriteFolder) {
-            favoriteOrUnfavoriteString = NSLocalizedString(@"not_available_offline", nil);
+            availableOfflineOrNotString = NSLocalizedString(@"not_available_offline", nil);
         } else {
-            favoriteOrUnfavoriteString = NSLocalizedString(@"available_offline", nil);
+            availableOfflineOrNotString = NSLocalizedString(@"available_offline", nil);
         }
         
-        self.moreActionSheet = [[UIActionSheet alloc]initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle: nil otherButtonTitles:NSLocalizedString(@"open_with_label", nil), NSLocalizedString(@"rename_long_press", nil), NSLocalizedString(@"move_long_press", nil), favoriteOrUnfavoriteString, nil];
+        NSString *downloadFileCancelDownload;
+        
+        if ([[AppDelegate sharedManageFavorites] isInsideAFavoriteFolderThisFile:self.selectedFileDto] || self.selectedFileDto.isFavorite  ||
+            self.selectedFileDto.isDownload == downloaded) {
+            downloadFileCancelDownload = nil;
+        } else {
+            if (self.selectedFileDto.isDownload == downloading ||
+                self.selectedFileDto.isDownload == updating) {
+                downloadFileCancelDownload = NSLocalizedString(@"cancel_download", nil);
+            } else {
+                downloadFileCancelDownload = NSLocalizedString(@"download_file", nil);
+            }
+        }
+        
+        self.moreActionSheet = [[UIActionSheet alloc]initWithTitle:title delegate:self cancelButtonTitle:NSLocalizedString(@"cancel", nil) destructiveButtonTitle: nil otherButtonTitles:NSLocalizedString(@"open_with_label", nil), NSLocalizedString(@"rename_long_press", nil), NSLocalizedString(@"move_long_press", nil), availableOfflineOrNotString, downloadFileCancelDownload, nil];
         self.moreActionSheet.tag=200;
         
         if (IS_IPHONE) {

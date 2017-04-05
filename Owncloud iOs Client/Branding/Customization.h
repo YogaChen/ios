@@ -15,7 +15,7 @@
 
 
 //app year
-#define k_year 2016
+#define k_year 2017
 
 //URLs Setting
 #define k_help_url @"http://owncloud.com/mobile/help"
@@ -130,8 +130,8 @@
 #define k_is_shown_help_link_on_login NO
 #define k_url_link_on_login @"https://owncloud.com/mobile/new"
 
-//User-Agent
-#define k_user_agent @"Mozilla/5.0 (iOS) ownCloud-iOS/"
+//User-Agent, Mozilla/5.0 (iOS) ownCloud-iOS/<appVersion> <ob_customUserAgent>
+#define k_user_agent @"Mozilla/5.0 (iOS) ownCloud-iOS/$appVersion"
 
 //Enable/Disable Background uploads and download (NSURLSession or NSOperation)
 #define k_is_background_active YES
@@ -147,3 +147,6 @@
 
 //Show share by link
 #define k_is_share_by_link_available YES
+
+//Force passcode
+#define k_is_passcode_forced NO

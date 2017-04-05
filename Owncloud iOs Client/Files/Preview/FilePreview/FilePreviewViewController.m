@@ -44,12 +44,15 @@
 #import "ManageCapabilitiesDB.h"
 #import "EditFileViewController.h"
 #import "UtilsBrandedOptions.h"
-
+#import "UtilsFramework.h"
+#import "CheckAccessToServer.h"
 
 //Constant for iOS7
 #define k_status_bar_height 20
 #define k_navigation_bar_height 44
 #define k_navigation_bar_height_in_iphone_landscape 32
+#define k_iphone_plus_correction 10
+
 
 NSString * iPhoneCleanPreviewNotification = @"iPhoneCleanPreviewNotification";
 NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNotConnectionWithServerMessageNotification";
@@ -62,13 +65,22 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
 
 #pragma mark - Init methods
-- (id) initWithNibName:(NSString *) nibNameOrNil selectedFile:(FileDto *) file
-{
+- (id) initWithNibName:(NSString *) nibNameOrNil selectedFile:(FileDto *) file andIsForceDownload:(BOOL) isForceDownload {
+    
+    if (file.isDownload == downloading) {
+        isForceDownload = YES;
+    }
     
     [[AppDelegate sharedSyncFolderManager] cancelDownload:file];
     
+    if (!isForceDownload) {
+        isForceDownload = [[AppDelegate sharedManageFavorites] isInsideAFavoriteFolderThisFile:file] || file.isFavorite;
+    }
+    
+    
     //Assing the file
-    _file = file;
+    self.file = file;
+    self.isForceDownload = isForceDownload;
     
     DLog(@"File to preview: %@ with File id: %ld", self.file.fileName, (long)file.idFile);
     
@@ -119,7 +131,20 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication]delegate];
     _currentLocalFolder = [NSString stringWithFormat:@"%@%ld/%@", [UtilsUrls getOwnCloudFilePath],(long)app.activeUser.idUser, [UtilsUrls getFilePathOnDBByFilePathOnFileDto:_file.filePath andUser:app.activeUser]];
     _currentLocalFolder = [_currentLocalFolder stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
-
+    
+    //Obtain the type of file
+    _typeOfFile = [FileNameUtils checkTheTypeOfFile:_file.fileName];
+    
+    if(self.file.isDownload == notDownload && !self.isForceDownload && self.typeOfFile == videoFileType && ([[CheckAccessToServer sharedManager] getSslStatus] != sslStatusSelfSigned)) {
+        //Not show options
+        NSMutableArray *customItems = [NSMutableArray arrayWithArray:self.toolBar.items];
+        [customItems removeObjectIdenticalTo:_openInButtonBar];
+        [customItems removeObjectIdenticalTo:_flexibleSpaceAfterOpenInButtonBar];
+        [customItems removeObjectIdenticalTo:_favoriteButtonBar];
+        [customItems removeObjectIdenticalTo:_flexibleSpaceAfterFavoriteButtonBar];
+        self.toolBar.items = customItems;
+    }
+    
     //Check if share link button should be appear.
     if ((k_hide_share_options) || (APP_DELEGATE.activeUser.hasCapabilitiesSupport == serverFunctionalitySupported && APP_DELEGATE.activeUser.capabilitiesDto && !APP_DELEGATE.activeUser.capabilitiesDto.isFilesSharingAPIEnabled)) {
         NSMutableArray *customItems = [NSMutableArray arrayWithArray:self.toolBar.items];
@@ -138,8 +163,6 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
 -(void)viewWillDisappear:(BOOL)animated
 {
-    [super viewWillDisappear:animated];
-    
     AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
     if (app.isSharedToOwncloudPresent == NO && _notification.notificationIsShowing) {
         //Stop the notification
@@ -149,6 +172,14 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
             _notification = nil;
         }
     }
+    
+    //Quit the player if exist
+    if (self.avMoviePlayer) {
+        [self.avMoviePlayer.contentOverlayView removeObserver:self forKeyPath:[MediaAVPlayerViewController observerKeyFullScreen]];
+        [self.avMoviePlayer.player pause];
+    }
+    
+    [super viewWillDisappear:animated];
 }
 
 -(void)viewDidDisappear:(BOOL)animated{
@@ -172,6 +203,11 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     
     //Configure view depend device orientation
     [self configureView];
+    
+    //Quit the player if exist
+    if (self.avMoviePlayer) {
+        [self.avMoviePlayer.contentOverlayView addObserver:self forKeyPath:[MediaAVPlayerViewController observerKeyFullScreen] options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:NULL];
+    }
 }
 
 
@@ -380,44 +416,43 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 #pragma mark - Rotation Methods
 
 -(void)potraitView{
-    if (_moviePlayer) {
+    if (self.avMoviePlayer) {
         UIScreen *screen = [UIScreen mainScreen];
         CGSize screenSize = screen.bounds.size;
         
-        if (_moviePlayer.isFullScreen == NO) {
-            //[nc manageBackgroundView:NO];
-            if ([screen respondsToSelector:@selector(fixedCoordinateSpace)]) {
-                screenSize = [screen.coordinateSpace convertRect:screen.bounds toCoordinateSpace:screen.fixedCoordinateSpace].size;
-            }
-            _moviePlayer.moviePlayer.view.frame = CGRectMake(0,0, screenSize.width, (screenSize.height - _toolBar.frame.size.height - k_status_bar_height - k_navigation_bar_height));
+        if ([screen respondsToSelector:@selector(fixedCoordinateSpace)]) {
+            screenSize = [screen.coordinateSpace convertRect:screen.bounds toCoordinateSpace:screen.fixedCoordinateSpace].size;
+        }
+        
+        if (self.avMoviePlayer.isFullScreen) {
+            self.avMoviePlayer.view.frame = CGRectMake(0,0, screenSize.width, (screenSize.height - _toolBar.frame.size.height - k_navigation_bar_height));
         } else {
-            //[nc manageBackgroundView:YES];
-            if ([screen respondsToSelector:@selector(fixedCoordinateSpace)]) {
-                screenSize = [screen.coordinateSpace convertRect:screen.bounds toCoordinateSpace:screen.fixedCoordinateSpace].size;
-            }
-            _moviePlayer.moviePlayer.view.frame = CGRectMake(0,0, screenSize.width, screenSize.height);
+            self.avMoviePlayer.view.frame = CGRectMake(0,0, screenSize.width, (screenSize.height - _toolBar.frame.size.height - k_status_bar_height - k_navigation_bar_height));
         }
     }
 }
 
 -(void)landscapeView{
-    if (_moviePlayer) {
+    if (self.avMoviePlayer) {
         UIScreen *mainScreen = [UIScreen mainScreen];
         CGSize screenSize = mainScreen.bounds.size;
-
-        if (_moviePlayer.isFullScreen == NO) {
-            if ([mainScreen respondsToSelector:@selector(fixedCoordinateSpace)]) {
-                screenSize = [mainScreen.coordinateSpace convertRect:mainScreen.bounds toCoordinateSpace:mainScreen.fixedCoordinateSpace].size;
-            }
-            _moviePlayer.moviePlayer.view.frame = CGRectMake(0,0, screenSize.height, (screenSize.width - _toolBar.frame.size.height - k_status_bar_height - k_navigation_bar_height_in_iphone_landscape));
-            
-        } else {
-            if ([mainScreen respondsToSelector:@selector(fixedCoordinateSpace)]) {
-                screenSize = [mainScreen.coordinateSpace convertRect:mainScreen.bounds toCoordinateSpace:mainScreen.fixedCoordinateSpace].size;
-            }
-            _moviePlayer.moviePlayer.view.frame = CGRectMake(0,0, screenSize.height, screenSize.width);
-
+        
+        if ([mainScreen respondsToSelector:@selector(fixedCoordinateSpace)]) {
+            screenSize = [mainScreen.coordinateSpace convertRect:mainScreen.bounds toCoordinateSpace:mainScreen.fixedCoordinateSpace].size;
         }
+        
+        NSInteger iPhoneCorrection = 0;
+        
+        if (IS_IPHONE_PLUS) {
+            iPhoneCorrection = k_iphone_plus_correction;
+        }
+        
+        if (self.avMoviePlayer.isFullScreen) {
+            self.avMoviePlayer.view.frame = CGRectMake(0,0, screenSize.height, (screenSize.width - _toolBar.frame.size.height - k_navigation_bar_height_in_iphone_landscape - iPhoneCorrection));
+        } else {
+            self.avMoviePlayer.view.frame = CGRectMake(0,0, screenSize.height, (screenSize.width - _toolBar.frame.size.height - k_status_bar_height - k_navigation_bar_height_in_iphone_landscape - iPhoneCorrection));
+        }
+        
     }
 }
 
@@ -426,11 +461,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
     [self putTheFavoriteStatus];
     
-    UIInterfaceOrientation currentOrientation;
-    currentOrientation = [[UIApplication sharedApplication] statusBarOrientation];
-    BOOL isPotrait = UIDeviceOrientationIsPortrait(currentOrientation);
-    
-    if (isPotrait == YES) {
+    if (IS_PORTRAIT) {
         [self potraitView];
     } else {
         [self landscapeView];
@@ -462,6 +493,16 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
          [_galleryView adjustTheScrollViewAfterTheRotation];
     } else if (_readerPDFViewController) {
         [_readerPDFViewController willAnimateRotationToInterfaceOrientation:toInterfaceOrientation duration:duration];
+    } else if (_gifView) {
+        
+        CGRect frame = self.view.frame;
+        frame.size.height = frame.size.height-(_toolBar.frame.size.height + self.navigationController.navigationBar.frame.size.height + [[UIApplication sharedApplication] statusBarFrame].size.height);
+        frame.origin.y = self.navigationController.navigationBar.frame.size.height + [[UIApplication sharedApplication] statusBarFrame].size.height;
+        self.gifView.frame = frame;
+    } else if (_officeView) {
+        CGRect frame = self.view.frame;
+        _officeView.frame = frame;
+        _toolBar.hidden = _officeView.isFullscreen;
     } else {
         _toolBar.hidden = NO;
     }
@@ -479,6 +520,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     if (_readerPDFViewController) {
         [_readerPDFViewController didRotateFromInterfaceOrientation:fromInterfaceOrientation];
     }
+    
+    [self configureView];
 }
 
 - (BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation
@@ -505,10 +548,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
      */
     
     //Update the file
-    _file = [ManageFilesDB getFileDtoByIdFile:_file.idFile];
-    
-    //Obtain the type of file
-    _typeOfFile = [FileNameUtils checkTheTypeOfFile:_file.fileName];
+    self.file = [ManageFilesDB getFileDtoByFileName:_file.fileName andFilePath:[UtilsUrls getFilePathOnDBByFilePathOnFileDto:_file.filePath andUser:APP_DELEGATE.activeUser] andUser:APP_DELEGATE.activeUser];
     
     if (_typeOfFile == imageFileType) {
         //black screen
@@ -516,18 +556,24 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         [self performSelector:@selector(initGallery) withObject:nil afterDelay:0.1];
     } else {
         
-        if (!_file.isNecessaryUpdate) {
+        if (!self.file.isNecessaryUpdate) {
             [self previewFile];
         }
         
         DLog(@"ide file: %ld",(long)_file.idFile);
         DLog(@"is Donwloaded: %ld",(long)_file.isDownload);
-        
         //Check if the file is in the device
-        if ([_file isDownload] == notDownload) {
-
-            //Download the file
-            [self downloadTheFile];
+        if (self.file.isDownload == notDownload) {
+            if(!self.isForceDownload && self.typeOfFile == videoFileType && ([[CheckAccessToServer sharedManager] getSslStatus] != sslStatusSelfSigned)) {
+                //Streaming video
+                [self performSelector:@selector(playMediaFile) withObject:nil afterDelay:0.5];
+            } else {
+                if (([[CheckAccessToServer sharedManager] getSslStatus] == sslStatusSelfSigned) && self.typeOfFile == videoFileType && !self.isForceDownload) {
+                    [self showAlertView:NSLocalizedString(@"streaming_no_possible_ssl_self_signed", nil)];
+                }
+                //Download the file
+                [self downloadTheFile];
+            }
         } else if ((_file.isDownload == downloading) || (_file.isDownload == updating)) {
             //Continue the download
             if (_file.isDownload == updating) {
@@ -536,6 +582,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
                     [self performSelector:@selector(playMediaFile) withObject:nil afterDelay:0.0];
                 } else if (_typeOfFile == officeFileType) {
                     [self performSelectorOnMainThread:@selector(openFileOffice) withObject:nil waitUntilDone:YES];
+                } else if (_typeOfFile == gifFileType) {
+                    [self performSelectorOnMainThread:@selector(openGifFile) withObject:nil waitUntilDone:YES];
                 } else {
                     [self cleanView];
                 }
@@ -577,7 +625,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
                     [self performSelector:@selector(playMediaFile) withObject:nil afterDelay:0.0];
                 } else if (_typeOfFile == officeFileType) {
                     [self performSelector:@selector(openFileOffice) withObject:nil afterDelay:0.1];
-                    //[self performSelectorOnMainThread:@selector(openFileOffice) withObject:nil waitUntilDone:YES];
+                } else if (_typeOfFile == gifFileType) {
+                    [self performSelector:@selector(openGifFile) withObject:nil afterDelay:0.1];
                 } else {
                     [self cleanView];
                 }
@@ -680,11 +729,12 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
                     frame.size.height = frame.size.height-_toolBar.frame.size.height;
                     frame.origin.y = 0;
                     _officeView=[[OfficeFileView alloc]initWithFrame:frame];
+                    _officeView.delegate = self;
                 }
                 
                 [_officeView openOfficeFileWithPath:_file.localFolder andFileName:_file.fileName];
                 
-                [self.view addSubview:_officeView.webView];
+                [self.view addSubview:_officeView];
                 if (_file.isNecessaryUpdate) {
                     [self.view bringSubviewToFront:_updatingFileView];
                 }
@@ -697,6 +747,38 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
 
 }
 
+/*
+ * Open a GIF file
+ */
+
+- (void) openGifFile {
+    
+    if (self.gifView){
+        [self.gifView removeFromSuperview];
+        self.gifView = nil;
+    }
+    
+    self.gifView = [FLAnimatedImageView new];
+    self.gifView.contentMode = UIViewContentModeScaleAspectFit;
+    self.gifView.clipsToBounds = true;
+    
+    CGRect frame = self.view.frame;
+    frame.size.height = frame.size.height-(_toolBar.frame.size.height + self.navigationController.navigationBar.frame.size.height + [[UIApplication sharedApplication] statusBarFrame].size.height);
+    frame.origin.y = self.navigationController.navigationBar.frame.size.height + [[UIApplication sharedApplication] statusBarFrame].size.height;
+    self.gifView.frame = frame;
+    [self.view addSubview:self.gifView];
+    
+    NSData *gifData = [NSData dataWithContentsOfFile:_file.localFolder];
+    
+    if (gifData != nil) {
+        FLAnimatedImage *gifImage = [FLAnimatedImage animatedImageWithGIFData:gifData];
+        self.gifView.animatedImage = gifImage;
+    }
+    
+    //Enable back button
+    self.navigationController.navigationBar.userInteractionEnabled = YES;
+    _toolBar.userInteractionEnabled = YES;
+}
 
 #pragma mark - Loading Methods
 
@@ -851,6 +933,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         [nc manageBackgroundView:NO];
         //Set the new position of the toolBar
         _toolBar.frame = CGRectMake(0, self.view.frame.size.height-_toolBar.frame.size.height, self.view.frame.size.width, _toolBar.frame.size.height);
+        [self.view bringSubviewToFront:_toolBar];
     } completion:^(BOOL finished){
         //When the animation finish, show the labels in the tollBar
         _toolBar.hidden = NO;
@@ -871,7 +954,7 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
  *
  */
 - (BOOL)prefersStatusBarHidden {
-    if (_galleryView.fullScreen || _moviePlayer.isFullScreen) {
+    if (_galleryView.fullScreen) {
         return YES;
     } else {
         return NO;
@@ -905,17 +988,17 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     
     BOOL isNewMediaPlayer = YES;
     
-    if (appDelegate.mediaPlayer != nil) {
+    if (appDelegate.avMoviePlayer != nil) {
         
         //Know if the last media file played
-        if ([appDelegate.mediaPlayer.urlString isEqualToString:_file.localFolder]) {
+        if ([appDelegate.avMoviePlayer.urlString isEqualToString:_file.localFolder]) {
             isNewMediaPlayer = NO;
         } else {
-            [appDelegate.mediaPlayer removeNotificationObservation];
-            [appDelegate.mediaPlayer.moviePlayer stop];
-            [appDelegate.mediaPlayer finalizePlayer];
-            [appDelegate.mediaPlayer.view removeFromSuperview];
-             appDelegate.mediaPlayer = nil;
+            [appDelegate.avMoviePlayer.contentOverlayView removeObserver:self forKeyPath:[MediaAVPlayerViewController observerKeyFullScreen]];
+            [appDelegate.avMoviePlayer.player pause];
+            appDelegate.avMoviePlayer.player = nil;
+            [appDelegate.avMoviePlayer.view removeFromSuperview];
+             appDelegate.avMoviePlayer = nil;
             isNewMediaPlayer = YES;
         }
     } else {
@@ -925,10 +1008,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     
     if (isNewMediaPlayer == NO) {
         
-        _moviePlayer = appDelegate.mediaPlayer;
-        _moviePlayer.delegate = self;
-        
-        [self.view addSubview: _moviePlayer.moviePlayer.view];
+        self.avMoviePlayer = appDelegate.avMoviePlayer;
+        [self.view addSubview: self.avMoviePlayer.view];
         
         [self configureView];
         
@@ -946,33 +1027,63 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
                 DLog(@"AVAudioSession activation error: %@", activationError);
             }
         }
-
-        NSURL *url = [NSURL fileURLWithPath:_file.localFolder];
-        _moviePlayer = [[MediaViewController alloc]initWithContentURL:url];
-        _moviePlayer.urlString = _file.localFolder;
         
-        //if is audio file tell the controller the file is music
-        _moviePlayer.isMusic = YES;
+        AVPlayer *player;
         
-        _moviePlayer.moviePlayer.controlStyle = MPMovieControlStyleNone;
-        [_moviePlayer.moviePlayer setFullscreen:NO];
-        _moviePlayer.moviePlayer.shouldAutoplay = NO;
-        _moviePlayer.delegate = self;
+        if (self.file.isDownload) {
+            
+            NSURL *url = [NSURL fileURLWithPath:_file.localFolder];
+            player = [AVPlayer playerWithURL:url];
+            
+        } else {
+            
+            //FileName full path
+            NSString *path = [UtilsUrls  getFullRemoteServerFilePathByFile:self.file andUser:APP_DELEGATE.activeUser];
+            
+            self.asset = [AVURLAsset URLAssetWithURL:[NSURL URLWithString:path] options:@{@"AVURLAssetHTTPHeaderFieldsKey" : [UtilsNetworkRequest getHttpLoginHeaders]}];
+            [self.asset.resourceLoader setDelegate:self queue:dispatch_get_main_queue()];
+            AVPlayerItem *playerItem = [[AVPlayerItem alloc] initWithAsset:self.asset];
+    
+            player = [[AVPlayer alloc] initWithPlayerItem:playerItem];
+        }
+                
+        // create a player view controller
+        self.avMoviePlayer = [[MediaAVPlayerViewController alloc]init];
         
-        appDelegate.mediaPlayer = _moviePlayer;
-        [self.view addSubview:_moviePlayer.moviePlayer.view];
+        self.avMoviePlayer.player = player;
+        [player play];
         
+        // show the view controller
+        [self addChildViewController:self.avMoviePlayer];
+        [self.view addSubview:self.avMoviePlayer.view];
+        self.avMoviePlayer.view.frame = self.view.frame;
+        
+        [self.avMoviePlayer.contentOverlayView addObserver:self forKeyPath:[MediaAVPlayerViewController observerKeyFullScreen] options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld context:NULL];
         
         [self configureView];
-        
-        [_moviePlayer initHudView];
-        [_moviePlayer.moviePlayer setScalingMode:MPMovieScalingModeAspectFit];
-        [_moviePlayer.moviePlayer prepareToPlay];
-        [_moviePlayer playFile];
-
     }
 }
 
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *, id> *)change context:(void *)context {
+    if (object == self.avMoviePlayer.contentOverlayView) {
+        if ([keyPath isEqualToString:[MediaAVPlayerViewController observerKeyFullScreen]]) {
+            CGRect oldBounds = [change[NSKeyValueChangeOldKey] CGRectValue], newBounds = [change[NSKeyValueChangeNewKey] CGRectValue];
+            BOOL wasFullscreen = CGRectEqualToRect(oldBounds, [UIScreen mainScreen].bounds), isFullscreen = CGRectEqualToRect(newBounds, [UIScreen mainScreen].bounds);
+            if (isFullscreen && !wasFullscreen) {
+                if (CGRectEqualToRect(oldBounds, CGRectMake(0, 0, newBounds.size.height, newBounds.size.width))) {
+                    DLog(@"rotated fullscreen");
+                    self.avMoviePlayer.isFullScreen = YES;
+                } else {
+                    DLog(@"entered fullscreen");
+                    self.avMoviePlayer.isFullScreen = YES;
+                }
+            } else if (!isFullscreen && wasFullscreen) {
+                DLog(@"exited fullscreen");
+                self.avMoviePlayer.isFullScreen = NO;
+            }
+        }
+    }
+}
 
 #pragma mark - Media player delegate methods
 
@@ -997,6 +1108,27 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
         [_toolBar setHidden:NO];
          [nc manageBackgroundView:NO];
         [self configureView];
+    }
+}
+
+#pragma mark - OfficeFileView Delegate Methods
+- (void)setFullscreenOfficeFileView:(BOOL)isFullscreen {
+    if (isFullscreen) {
+        CGRect frame = self.view.bounds;
+        CGFloat statusBarHeight = UIApplication.sharedApplication.statusBarFrame.size.height;
+        frame.origin.y = statusBarHeight;
+        frame.size.height = UIScreen.mainScreen.bounds.size.height - statusBarHeight;
+
+        _officeView.frame = frame;
+        //Hide the toolBar and the navigationBar with animation
+        [self hideBars];
+    } else {
+        CGRect frame = self.view.bounds;
+        frame.size.height = frame.size.height-_toolBar.frame.size.height;
+        _officeView.frame = frame;
+
+        //Show the toolBar and the navigationBar with animation
+        [self showBars];
     }
 }
 
@@ -1422,14 +1554,13 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
     if (_file.idFile == fileDto.idFile) {
         
         //Quit the player if exist
-        if (app.mediaPlayer) {
-            [app.mediaPlayer removeNotificationObservation];
-            [app.mediaPlayer.moviePlayer stop];
-            [app.mediaPlayer finalizePlayer];
-            [app.mediaPlayer.moviePlayer.view removeFromSuperview];
-            app.mediaPlayer = nil;
+        if (app.avMoviePlayer) {
+            [app.avMoviePlayer.contentOverlayView removeObserver:self forKeyPath:[MediaAVPlayerViewController observerKeyFullScreen]];
+            [app.avMoviePlayer.player pause];
+            app.avMoviePlayer.player = nil;
+            [app.avMoviePlayer.view removeFromSuperview];
+            app.avMoviePlayer = nil;
         }
-
         
         if(_typeOfFile == officeFileType) {
             [self performSelector:@selector(openFileOffice) withObject:nil afterDelay:0.5];
@@ -1437,6 +1568,8 @@ NSString * iPhoneShowNotConnectionWithServerMessageNotification = @"iPhoneShowNo
             [self performSelector:@selector(playMediaFile) withObject:nil afterDelay:0.5];
         } else if(_typeOfFile == videoFileType) {
             [self performSelector:@selector(playMediaFile) withObject:nil afterDelay:0.5];
+        } else if (_typeOfFile == gifFileType) {
+            [self performSelector:@selector(openGifFile) withObject:nil afterDelay:0.5];
         } else if (_typeOfFile == imageFileType){
             DLog(@"Image file");
         } else {

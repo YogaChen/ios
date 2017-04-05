@@ -123,7 +123,7 @@ fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
     
     func createCustomInterface(){
         
-        let rightBarButton = UIBarButtonItem (title:NSLocalizedString("upload_label", comment: ""), style: .plain, target: self, action:#selector(ShareViewController.sendTheFilesToOwnCloud))
+        let rightBarButton = UIBarButtonItem (title:NSLocalizedString("upload_label", comment: ""), style: .plain, target: self, action:#selector(ShareViewController.uploadButtonTapped))
         let leftBarButton = UIBarButtonItem (title:NSLocalizedString("cancel", comment: ""), style: .plain, target: self, action:#selector(ShareViewController.cancelView))
         
         let appName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as! String
@@ -167,6 +167,32 @@ fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
         self.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         return
        
+    }
+    
+    func uploadButtonTapped() {
+        
+        let activeUser = ManageUsersDB.getActiveUser()
+        
+        if activeUser != nil {
+            
+            var title = ""
+            
+            title = NSLocalizedString("files_will_be_upload_next_time", comment: "")
+            let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as! String
+            title = title.replacingOccurrences(of: "$appname", with: appName)
+            
+            let alert = UIAlertController(title: title, message: "", preferredStyle: UIAlertControllerStyle.alert)
+            
+            alert.addAction(UIAlertAction(title: NSLocalizedString("ok", comment: ""), style: .default, handler: { action in
+                self.sendTheFilesToOwnCloud()
+            }))
+            
+            self.present(alert, animated: true, completion: nil)
+            
+        } else {
+            self.showErrorLoginView()
+        }
+   
     }
     
     func sendTheFilesToOwnCloud() {
@@ -254,9 +280,7 @@ fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
                     msg = NSLocalizedString("forbidden_characters_from_server", comment: "")
                 
                     showAlertView(msg)
-                    
                 }
-                
             }
             
             if hasSomethingToUpload == true {
@@ -294,8 +318,7 @@ fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
                 (CheckAccessToServer.sharedManager() as? CheckAccessToServer)!.isConnectionToTheServer(byUrl: activeUser!.url)
             }
         } else {
-            let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            showAlertView((NSLocalizedString("error_login_doc_provider", comment: "") as NSString).replacingOccurrences(of: "$appname", with: appName!))
+            self.showErrorLoginView()
         }
     }
     
@@ -540,6 +563,11 @@ fileprivate func > <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
         
         print("Cancel folder selected")
         
+    }
+    
+    func showErrorLoginView () {
+        let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+        showAlertView((NSLocalizedString("error_login_doc_provider", comment: "") as NSString).replacingOccurrences(of: "$appname", with: appName!))
     }
     
     func showAlertView(_ title: String) {

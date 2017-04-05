@@ -46,6 +46,7 @@ static NSString *const tmpFileName = @"tmp.der";
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         sharedCheckAccessToServer = [[self alloc] init];
+        sharedCheckAccessToServer.sslStatus = sslStatusNotChecked;
     });
     return sharedCheckAccessToServer;
 }
@@ -76,28 +77,34 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
     
     //We save the url to later compare with urlServerRedirected in request
     self.urlUserToCheck = url;
+    self.isSameCertificateSelfSigned = NO;
     
     _urlStatusCheck = [NSString stringWithFormat:@"%@status.php", url];
     
-    NSLog(@"URL Status: |%@|", _urlStatusCheck);
+    DLog(@"_isConnectionToTheServerByUrl_ URL Status: |%@|", _urlStatusCheck);
     
     
     NSMutableURLRequest* request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_urlStatusCheck] cachePolicy:0 timeoutInterval:timeout];
     
     //Add the user agent
     [request addValue:[UtilsUrls getUserAgent] forHTTPHeaderField:@"User-Agent"];
+    [request setHTTPShouldHandleCookies:false];
     
     //Configure connectionSession
     NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    [configuration setHTTPShouldSetCookies:false];
+    configuration.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
+    configuration.HTTPCookieStorage = nil;
     NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:nil];
+    
     
     NSURLSessionDataTask *task = [session dataTaskWithRequest:request
                                             completionHandler:
                                   ^(NSData *data, NSURLResponse *response, NSError *error) {
                                       
-                                      if(error != nil){
+                                      if(error != nil) {
                                           DLog(@"Error: %@", error);
-                                          NSLog(@"Error: %ld - %@",(long)[error code] , [error localizedDescription]);
+                                          DLog(@"Error: %ld - %@",(long)[error code] , [error localizedDescription]);
                                           
                                           
                                           if (error.code == kCFURLErrorServerCertificateUntrusted         ||
@@ -115,8 +122,17 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
                                                   [self.delegate connectionToTheServer:NO];
                                               }
                                           }
-                                      }
-                                      else{
+                                      } else {
+                                          
+                                          if ([[self.urlStatusCheck lowercaseString] hasPrefix:@"http:"]) {
+                                              self.sslStatus = sslStatusSignedOrNotSSL;
+                                          } else {
+                                              if (self.isSameCertificateSelfSigned) {
+                                                  self.sslStatus = sslStatusSelfSigned;
+                                              } else {
+                                                  self.sslStatus = sslStatusSignedOrNotSSL;
+                                              }
+                                          }
                                           
                                           BOOL installed = NO;
                                           if (data!= nil) {
@@ -125,7 +141,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
                                               NSMutableDictionary *jsonArray = [NSJSONSerialization JSONObjectWithData: data options: NSJSONReadingMutableContainers error: &e];
                                               
                                               if (!jsonArray) {
-                                                  NSLog(@"Error parsing JSON: %@", e);
+                                                  DLog(@"Error parsing JSON: %@", e);
                                               } else {
                                                   installed = [[jsonArray valueForKey:@"installed"] boolValue];
                                               }
@@ -187,7 +203,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
 -(void) URLSession:(NSURLSession *)session didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential * _Nullable))completionHandler{
     
     
-    NSLog(@"didReceiveChallenge");
+    DLog(@"didReceiveChallenge");
     
     BOOL trusted = NO;
     SecTrustRef trust;
@@ -210,7 +226,8 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
             NSString *currentLocalCertLocation = [listCertificateLocation objectAtIndex:i];
             NSFileManager *fileManager = [ NSFileManager defaultManager];
             if([fileManager contentsEqualAtPath:[NSString stringWithFormat:@"%@%@",localCertificatesFolder,tmpFileName] andPath:[NSString stringWithFormat:@"%@",currentLocalCertLocation]]) {
-                NSLog(@"Is the same certificate!!!");
+                DLog(@"Is the same certificate!!!");
+                self.isSameCertificateSelfSigned = YES;
                 trusted = YES;
             }
         }
@@ -241,7 +258,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
         CFRelease(data);
         
         if (!x509cert) {
-            NSLog(@"OpenSSL couldn't parse X509 Certificate");
+            DLog(@"OpenSSL couldn't parse X509 Certificate");
             
         } else {
             
@@ -264,7 +281,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
         }
     
     } else {
-        NSLog(@"Failed to retrieve DER data from Certificate Ref");
+        DLog(@"Failed to retrieve DER data from Certificate Ref");
     }
     //Free
     X509_free(x509cert);
@@ -279,7 +296,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
         
         [[NSFileManager defaultManager] createDirectoryAtPath:dataPath withIntermediateDirectories:NO attributes:nil error:&error];
         
-        NSLog(@"Error: %@", [error localizedDescription]);
+        DLog(@"Error: %@", [error localizedDescription]);
     }
 }
 
@@ -317,7 +334,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
     if (buttonIndex == 1) {
         [self acceptCertificateAndRetryCheckToTheServer];
     } else {
-        NSLog(@"user pressed CANCEL");
+        DLog(@"user pressed CANCEL");
         [self.delegate badCertificateNoAcceptedByUser];
     }
 }
@@ -328,7 +345,7 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
 }
 
 - (void) acceptCertificate {
-    NSLog(@"user pressed YES");
+    DLog(@"user pressed YES");
     //Save temporal certificate
     
     NSString *localCertificatesFolder = [UtilsUrls getLocalCertificatesPath];
@@ -339,11 +356,11 @@ static SecCertificateRef SecTrustGetLeafCertificate(SecTrustRef trust)
     NSDate *date = [NSDate date];
     NSString *currentCertLocation = [NSString stringWithFormat:@"%@%f.der",localCertificatesFolder, [date timeIntervalSince1970]];
     
-    NSLog(@"currentCertLocation: %@", currentCertLocation);
+    DLog(@"currentCertLocation: %@", currentCertLocation);
     
     BOOL result = [fm moveItemAtPath:[NSString stringWithFormat:@"%@%@",localCertificatesFolder, tmpFileName] toPath:currentCertLocation error:&err];
     if(!result) {
-        NSLog(@"Error: %@", [err localizedDescription]);
+        DLog(@"Error: %@", [err localizedDescription]);
     } else {
         [ManageAppSettingsDB insertCertificate:[NSString stringWithFormat:@"%f.der", [date timeIntervalSince1970]]];
         
@@ -382,13 +399,14 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)redirectResponse
         app.activeUser = [ManageUsersDB getActiveUser];
 #endif
 
-        NSLog(@"responseURLString: %@", responseURLString);
-        NSLog(@"requestRedirect.HTTPMethod: %@", request.HTTPMethod);
+        DLog(@"responseURLString: %@", responseURLString);
+        DLog(@"requestRedirect.HTTPMethod: %@", request.HTTPMethod);
         
         NSMutableURLRequest *requestRedirect = [request mutableCopy];
         
         [requestRedirect setURL: [NSURL URLWithString:responseURLString]];
         requestRedirect.HTTPMethod = @"GET";
+        [requestRedirect setHTTPShouldHandleCookies:false];
         
         completionHandler(requestRedirect);
         
@@ -425,12 +443,17 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)redirectResponse
         NSString *currentLocalCertLocation = [listCertificateLocation objectAtIndex:i];
         NSFileManager *fileManager = [ NSFileManager defaultManager];
         if([fileManager contentsEqualAtPath:[NSString stringWithFormat:@"%@%@",localCertificatesFolder,tmpFileName] andPath:[NSString stringWithFormat:@"%@",currentLocalCertLocation]]) {
-            NSLog(@"Is the same certificate!!!");
+            DLog(@"Is the same certificate!!!");
             trusted = YES;
+            self.isSameCertificateSelfSigned = YES;
         }
     }
     
     return trusted;
+}
+
+- (NSInteger) getSslStatus {
+    return self.sslStatus;
 }
 
 @end
